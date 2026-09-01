@@ -1,0 +1,3502 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>StageMaster 10.20</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        html { overscroll-behavior: none; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #1a1a1a; color: white; margin: 0; padding-top: env(safe-area-inset-top, 10px); transition: background-color 0.3s; overscroll-behavior: none; }
+        .header h1 { margin: 5px 0; font-size: 1.8rem; color: #bf953f; text-transform: uppercase; font-weight: 900; }
+        .header h1 span { text-transform: lowercase; font-size: 1.2rem; }
+        .card { background: #2d2d2d; padding: 0.8rem; border-radius: 20px; width: 94%; max-width: 450px; text-align: center; position: relative; z-index: 10; box-sizing: border-box; }
+        
+        .mode-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-bottom: 10px; }
+        .mode-btn { height: 45px; background: #3d3d3d; color: #888; border-radius: 12px; font-size: 0.8rem; border: 2px solid transparent; }
+        .mode-btn.active { background: #bf953f; color: black; border-color: white; }
+
+        .metric { margin: 6px 0; padding: 8px; border-radius: 15px; background: #3d3d3d; position: relative; overflow: hidden; }
+        .total-box { border-left: 6px solid #ea4335; }
+        .partial-box { border-left: 6px solid #1a73e8; background: #253b5e; }
+        .go-flash { animation: flashing-green 0.5s infinite; }
+        @keyframes flashing-green { 0% { background: #3d3d3d; } 50% { background: #34a853; } 100% { background: #3d3d3d; } }
+        
+        .panic-mode { animation: panic-bg 0.5s infinite; }
+        @keyframes panic-bg { 0% { background-color: #1a1a1a; } 50% { background-color: #7a1a1a; } 100% { background-color: #1a1a1a; } }
+
+        .label { font-size: 0.75rem; color: #aaa; text-transform: uppercase; }
+        .value { font-size: 3.8rem; font-weight: bold; font-family: monospace; line-height: 1; }
+        
+        button { border: none; border-radius: 12px; cursor: pointer; font-weight: bold; text-transform: uppercase; touch-action: none; position: relative; overflow: hidden; }
+        .start-btn { background-color: #34a853; color: white; font-size: 1.4rem; height: 60px; width: 100%; margin-top: 8px; }
+        .stop-btn { background-color: #ea4335; color: white; font-size: 1.4rem; height: 60px; width: 100%; margin-top: 8px; }
+        .reset-partial-btn { background-color: #1a73e8; color: white; font-size: 1.5rem; height: 80px; width: 100%; margin-top: 8px; border-bottom: 5px solid #0d47a1; }
+        
+        .toolbar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px; width: 100%; }
+        .wp-btn { height: 100px; background: #1a1a1a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; border: none; }
+        .progress-ring { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 50%; background: conic-gradient(transparent 0deg, #444 0deg); z-index: 1; }
+        .wp-btn::after { content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; background: #1a1a1a; border-radius: 50%; z-index: 2; }
+        .wp-btn img { width: 55px; height: 55px; object-fit: contain; z-index: 3; margin-bottom: 2px; }
+        .wp-label { font-size: 0.7rem; font-weight: bold; z-index: 3; text-transform: uppercase; }
+        .wp-counter { position: absolute; top: 12px; right: 15px; font-size: 0.85rem; font-weight: bold; background: rgba(20,20,20,0.9); padding: 2px 7px; border-radius: 8px; z-index: 4; border: 1px solid #555; }
+
+        /* Isolated Dynamic Tulip Box Structure */
+.tulip-preview-container { 
+    display: none; /* Keeps it strictly hidden in REC mode */
+    position: relative; 
+    background: #3d3d3d; 
+    border: 2px solid #555; 
+    border-radius: 15px; 
+    width: 100%; 
+    height: 220px; /* Bigger height */
+    margin-top: 10px; 
+    align-items: center; 
+    justify-content: center; 
+    overflow: hidden; 
+    box-sizing: border-box; 
+    transform: translateZ(0); 
+    isolation: isolate;
+    /* Critical Fix: Forces mobile browsers to clip the spinning map inside the rounded borders */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+#liveMap { 
+    display: block !important; 
+    position: absolute; 
+    /* Pushes the exact center of the map (the car) down to 75% of the container's height */
+    top: 75%; 
+    left: 50%; 
+    /* Expanded canvas to 750px so the edges never show as it spins from the new low anchor point */
+    width: 750px; 
+    height: 750px; 
+    margin-top: -375px; 
+    margin-left: -375px; 
+    background-color: #3d3d3d; 
+    z-index: 1; 
+    transition: transform 0.2s linear; 
+}
+        #tulipLiveImg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 5; display: none; background: #1a1a1a; }
+        
+        /* Compass Arrow Shock Absorber & Panic Flash */
+        .compass-arrow { transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); width: 75px !important; height: 75px !important; background: transparent !important; }
+        
+        .panic-mode .compass-arrow { animation: panic-arrow-color 0.5s infinite; }
+        @keyframes panic-arrow-color {
+            0% { filter: none; }
+            50% { filter: invert(20%) sepia(90%) saturate(7000%) hue-rotate(350deg) brightness(100%) contrast(120%); } /* Forces the gold SVG to render as bright red */
+            100% { filter: none; }
+        }
+
+        #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; justify-content: center; align-items: center; }
+        
+        /* Fireworks Effect */
+        @keyframes firework-burst {
+            0% { box-shadow: 0 0 0 -5px #ff0, 0 0 0 -5px #ea4335, 0 0 0 -5px #34a853, 0 0 0 -5px #1a73e8; }
+            50% { box-shadow: 0 -40px 10px 5px #ff0, 40px -20px 10px 5px #ea4335, -40px -20px 10px 5px #34a853, 0 40px 10px 5px #1a73e8; }
+            100% { box-shadow: 0 -60px 20px 0 transparent, 60px -30px 20px 0 transparent, -60px -30px 20px 0 transparent, 0 60px 20px 0 transparent; }
+        }
+        .fireworks-active { animation: firework-burst 1s ease-out infinite; border: 4px solid #fbbc05 !important; }
+        
+        /* REGULARITY SUMMARY MODAL */
+        #regularitySummaryModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10005; justify-content: center; align-items: center; }
+        .reg-summary-content { background: #2d2d2d; padding: 1.5rem; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; border: 2px solid #555; position: relative; display: flex; flex-direction: column; max-height: 85vh; }
+        .close-x-btn { position: absolute; top: 10px; right: 10px; width: 35px; height: 35px; border-radius: 50%; background: #444; border: 2px solid #666; color: white; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; line-height: 1; z-index: 10; }
+        .reg-table-container { overflow-y: auto; max-height: 380px; margin-bottom: 15px; border: 1px solid #444; border-radius: 8px; background: #1a1a1a; }
+        .reg-table { width: 100%; text-align: left; border-collapse: collapse; font-family: monospace; font-size: 0.9rem; }
+        .reg-table th { padding: 8px 4px; border-bottom: 2px solid #555; color: #aaa; position: sticky; top: 0; background: #2d2d2d; }
+        .reg-table td { padding: 10px 4px; border-bottom: 1px solid #333; }
+    </style>
+
+<!-- FIREBASE SCRIPTS -->
+<script src="https://www.gstatic.com/firebasejs/9.12.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.12.1/firebase-database-compat.js"></script>
+<script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBs0cwlyt3rG5lkIprym-Hvi0FVfyh-Slc",
+      authDomain: "stagemaster-live.firebaseapp.com",
+      projectId: "stagemaster-live",
+      storageBucket: "stagemaster-live.firebasestorage.app",
+      messagingSenderId: "430599544857",
+      appId: "1:430599544857:web:9dd10d39bf5249bd598a88",
+      databaseURL: "https://stagemaster-live-default-rtdb.europe-west1.firebasedatabase.app/"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    let myCarId = ""; // Prompt removed! Controlled by Welcome Modal now
+</script>
+
+</head>
+<body onload="checkStateRecovery()">
+
+<!-- WELCOME / CAR ID MODAL -->
+<div id="welcomeModal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100000; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box;">
+    <div style="color: #bf953f; font-size: 1.8rem; font-weight: 900; text-transform: uppercase; margin-bottom: 20px;">STAGEMASTER INIT</div>
+    
+    <input type="text" id="welcomeCarIdInput" placeholder="Enter Name / ID (e.g., MIV 3)" style="width: 100%; max-width: 300px; padding: 15px; border-radius: 12px; border: 2px solid #555; background: #2d2d2d; color: white; font-size: 1.2rem; text-align: center; font-weight: bold; margin-bottom: 25px; outline: none;">
+    
+    <input type="file" id="welcomeKmlInput" accept=".kml,application/vnd.google-earth.kml+xml,text/xml,application/xml" style="display: none;" onchange="handleWelcomeKml(event)">
+    
+    <button class="start-btn" id="welcomeLoadBtn" style="background-color: #1a73e8; margin-bottom: 15px; max-width: 300px; height: 60px;" onclick="document.getElementById('welcomeKmlInput').click()">LOAD KML</button>
+    
+    <button class="stop-btn" id="welcomeSkipBtn" style="background-color: #555; max-width: 300px; height: 60px;" onclick="skipWelcomeKml()">SKIP FILE</button>
+</div>
+
+<!-- LANGUAGE SELECTION OVERLAY -->
+<div id="languageOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 99999; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+    
+    <!-- Greek Selection -->
+    <div style="margin-bottom: 30px; cursor: pointer;" onclick="selectLanguage('el')">
+        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/gr-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <div style="font-size: 1.4rem; font-weight: bold; color: white; text-transform: uppercase;">Επιλογή γλώσσας</div>
+    </div>
+    
+    <!-- English Selection -->
+    <div style="margin-bottom: 30px; cursor: pointer;" onclick="selectLanguage('en')">
+        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/eng-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <div style="font-size: 1.4rem; font-weight: bold; color: white; text-transform: uppercase;">Language selection</div>
+    </div>
+
+    <!-- Map Review Selection -->
+    <div style="cursor: pointer;" onclick="openMapReviewFromLaunch()">
+        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/map-review.svg" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <div style="font-size: 1.4rem; font-weight: bold; color: #bf953f; text-transform: uppercase;">Map Review</div>
+    </div>
+
+</div>
+
+<script>
+    // --- WELCOME MODAL LOGIC ---
+    function finalizeWelcome(id) {
+        myCarId = id.trim();
+        if (myCarId) {
+            database.ref('live_stage/' + myCarId).onDisconnect().remove();
+        }
+        document.getElementById('welcomeModal').style.display = 'none';
+        document.getElementById('languageOverlay').style.display = 'flex';
+    }
+
+    function skipWelcomeKml() {
+        let inputVal = document.getElementById('welcomeCarIdInput').value;
+        if (!inputVal) { alert("Please enter your Name / ID first"); return; }
+        finalizeWelcome(inputVal);
+    }
+
+    function handleWelcomeKml(event) {
+        let inputVal = document.getElementById('welcomeCarIdInput').value;
+        if (!inputVal) { 
+            alert("Please enter your Name / ID first"); 
+            document.getElementById('welcomeKmlInput').value = ""; 
+            return; 
+        }
+        finalizeWelcome(inputVal);
+        switchMode('NAV'); // Pre-switch the app in the background
+        startImport(event);
+    }
+
+    // Logic to handle the button click
+    function selectLanguage(langCode) {
+        requestWakeLock(); // Secure the screen lock the exact moment they tap the app
+        
+        // 1. Save the choice into the browser's memory
+        localStorage.setItem('stagemaster_language', langCode);
+        
+        // 2. Hide this overlay to reveal the normal application underneath
+        document.getElementById('languageOverlay').style.display = 'none';
+
+        // 3. Immediately translate the main UI buttons if Greek is chosen
+        if (langCode === 'el') {
+            document.getElementById('modeRec').textContent = "Καταγραφή";
+            document.getElementById('modeNav').textContent = "Πλοήγηση";
+            document.getElementById('importBtn').textContent = "Εισαγωγή διαδρομής KML";
+            
+            let wipeBtn = document.getElementById('wipeBtn');
+            if (wipeBtn) wipeBtn.textContent = "Κρατήστε 3 δευτ. για διαγραφή";
+            
+            let recBtn = document.getElementById('recToggleBtn');
+            if (recBtn && recBtn.classList.contains('start-btn')) recBtn.textContent = "Έναρξη καταγραφής";
+            
+            let navBtn = document.getElementById('navToggleBtn');
+            if (navBtn && navBtn.classList.contains('start-btn')) navBtn.textContent = "Έναρξη πλοήγησης";
+            
+            let rpBtn = document.getElementById('resetPartialBtn');
+            if (rpBtn) rpBtn.textContent = "Μερικός μηδενισμός";
+            
+            let expBtn = document.getElementById('exportBtn');
+            if (expBtn) expBtn.textContent = "Λήψη αρχείου KML";
+
+            // Wipe Modal Translation
+            let wTitle = document.getElementById('wipeModalTitle');
+            if (wTitle) wTitle.textContent = "ΔΙΑΓΡΑΦΗ ΔΙΑΔΡΟΜΗΣ;";
+            let wText = document.getElementById('wipeModalText');
+            if (wText) wText.textContent = "Είστε σίγουροι ότι θέλετε να διαγράψετε οριστικά τη φορτωμένη διαδρομή και τη μνήμη;";
+            let wYes = document.getElementById('wipeModalYesBtn');
+            if (wYes) wYes.textContent = "ΝΑΙ, ΔΙΑΓΡΑΦΗ";
+            let wNo = document.getElementById('wipeModalNoBtn');
+            if (wNo) wNo.textContent = "ΑΚΥΡΩΣΗ";
+        }
+    }
+</script>
+
+<div class="header"><h1>STAGEMASTER <span>by</span> PILI</h1></div>
+
+<div class="card">
+    <div class="mode-container">
+        <button id="modeRec" class="mode-btn active" onclick="switchMode('REC')">Rec mode</button>
+        <button id="modeNav" class="mode-btn" onclick="switchMode('NAV')">Nav mode</button>
+    </div>
+
+    <div id="navControls" style="display: none; margin-bottom: 10px;">
+        <input type="file" id="kmlInput" accept=".kml,application/vnd.google-earth.kml+xml,text/xml,application/xml" style="display: none;" onchange="startImport(event)">
+        <button id="importBtn" class="start-btn" style="background-color: #1a73e8; height: 50px; font-size: 1rem;" onclick="document.getElementById('kmlInput').click()">Import KML path</button>
+        <button id="wipeBtn" class="stop-btn" style="display: none; background-color: #8b0000; height: 45px; font-size: 1rem; margin-top: 10px; border: 1px solid #ff4444;">Hold 3s to wipe route</button>
+    </div>
+
+    <div class="metric">
+        <div class="label">Speed KM/H</div>
+        <div id="currSpeed" class="value" style="color:#fbbc05; font-size: 4.8rem;">0</div>
+        <div id="accuracy" style="font-size: 0.7rem; padding: 4px 10px; border-radius: 10px; font-weight: bold; display: inline-block; background: #ea4335;">GPS: OFFLINE</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-bottom: 10px;">
+        <div class="metric total-box" id="totalArea" style="margin: 0;">
+            <div class="label" id="totalLabel">Total (HOLD 3S)</div>
+            <div id="total" class="value">0.00</div>
+        </div>
+
+        <div class="metric partial-box" style="margin: 0;">
+            <div class="label" id="partialLabel">Partial KM</div>
+            <div id="partial" class="value">0.00</div>
+            <div id="wpTargetDisplay" style="font-size: 0.8rem; color: #fbbc05; font-weight: bold; margin-top: 5px; display: none;">TARGET: ---</div>
+        </div>
+    </div>
+
+    <button id="recToggleBtn" class="start-btn">Start recording</button>
+    <button id="navToggleBtn" class="start-btn" style="display: none;">Start navigation</button>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px;">
+        <div style="background: #3d3d3d; padding: 8px; border-radius: 12px;"><div class="label">Time</div><div id="timer" style="font-size: 1.2rem; font-weight: bold; font-family: monospace;">00:00:00</div></div>
+        <div style="background: #3d3d3d; padding: 8px; border-radius: 12px;"><div class="label">Avg KM/H</div><div id="speed" style="font-size: 1.2rem; font-weight: bold; font-family: monospace;">0.0</div></div>
+        <div style="background: #3d3d3d; padding: 8px; border-radius: 12px;"><div class="label">Heading</div><div id="compass" style="font-size: 1.2rem; font-weight: bold; font-family: monospace; color: #bf953f;">---°</div></div>
+    </div>
+
+    <button id="resetPartialBtn" class="reset-partial-btn">Reset partial</button>
+
+    <div class="toolbar" id="recorderToolbar">
+        <button class="wp-btn" id="btn-rp">
+            <div class="progress-ring" id="ring-rp"></div>
+            <div class="wp-counter" id="count-rp" style="color: #fbbc05;">0</div>
+            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Yellow-thunder.png">
+            <div class="wp-label" style="color: #fbbc05;">Rp</div>
+        </button>
+        <button class="wp-btn" id="btn-nos">
+            <div class="progress-ring" id="ring-nos"></div>
+            <div class="wp-counter" id="count-nos" style="color: #1a73e8;">0</div>
+            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/blue_pin.png"> 
+            <div class="wp-label" style="color: #1a73e8;">No s</div>
+        </button>
+        <button class="wp-btn" id="btn-marshal">
+            <div class="progress-ring" id="ring-marshal"></div>
+            <div class="wp-counter" id="count-marshal" style="color: #e67e22;">0</div>
+            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Orange-marshal.png">
+            <div class="wp-label" style="color: #e67e22;">Marshal</div>
+        </button>
+    </div>
+
+    <div class="tulip-preview-container" id="tulipLiveBox">
+        <div id="liveMap"></div>
+        <img id="tulipLiveImg" src="" alt="Tulip Roadbook Preview">
+        <!-- REGULARITY HUD STRIP -->
+        <div id="regularityHud" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); text-align: center; padding: 6px 0; z-index: 100; display: none; font-weight: bold; font-family: monospace; font-size: 1.15rem; border-top: 1px solid #555;"></div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
+        <div style="font-size: 0.6rem; color: #666;">version 10.20</div>
+        <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
+    </div>
+</div> <!-- This closes the main .card container! -->
+
+<!-- FIX 1: Restored STAGE SUMMARY MODAL -->
+<div id="reportModal">
+    <div class="modal-content" style="background: #2d2d2d; padding: 1.5rem; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; border: 2px solid #555;">
+        <div style="color: #bf953f; font-size: 1.4rem; font-weight: bold; margin-bottom: 20px;">STAGE SUMMARY</div>
+        <div id="modalData" style="text-align: left; font-family: monospace; color: white; margin-bottom: 15px; line-height: 1.6;"></div>
+        <div class="stage-input-group" style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <input type="text" id="stageName" class="stage-input" placeholder="Name Stage (e.g. SS1)" style="flex: 1; padding: 10px; border-radius: 8px; border: none; background: #3d3d3d; color: white; font-size: 1rem; outline: none;">
+            <button id="saveNameBtn" class="confirm-name-btn" onclick="saveFileName()" style="background: #1a73e8; color: white; border: none; border-radius: 8px; padding: 0 15px; font-weight: bold;">SAVE</button>
+        </div>
+        <button id="exportBtn" class="start-btn" onclick="exportKML()">DOWNLOAD KML FILE</button>
+        <button class="stop-btn" style="background: #555; height: 50px; margin-top: 15px;" onclick="closeModalAndResumeRecording()">CLOSE & RESUME</button>
+    </div>
+</div>
+
+<!-- FIX 2: Restored ROUTE SETUP MODAL -->
+<div id="entrySetupModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100001; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: #2d2d2d; padding: 1.5rem; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; border: 2px solid #555;">
+        <div id="setupModalTitle" style="color: #bf953f; font-size: 1.4rem; font-weight: bold; margin-bottom: 20px;">ROUTE SETUP</div>
+        
+        <div id="setupDirectionLabel" style="color: #aaa; font-size: 0.8rem; margin-bottom: 5px; text-align: left; font-weight: bold;">DIRECTION</div>
+        <select id="setupDirection" onchange="autoSelectEntryPoint()" style="width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; background: #3d3d3d; color: white; border: none; font-size: 1rem; outline: none;">
+            <option value="normal">NORMAL (Start to Finish)</option>
+            <option value="reverse">REVERSE (Disable Alarm)</option>
+        </select>
+
+        <div id="setupEntryPointLabel" style="color: #aaa; font-size: 0.8rem; margin-bottom: 5px; text-align: left; font-weight: bold;">ENTRY POINT</div>
+        <select id="setupEntryPoint" style="width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; background: #3d3d3d; color: white; border: none; font-size: 1rem; outline: none;">
+        </select>
+
+        <div id="setupNavViewLabel" style="color: #aaa; font-size: 0.8rem; margin-bottom: 5px; text-align: left; font-weight: bold;">NAVIGATION VIEW</div>
+        <select id="setupNavView" style="width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; background: #3d3d3d; color: white; border: none; font-size: 1rem; outline: none;">
+            <option value="map">USE MAP (Default)</option>
+            <option value="tulip">TULIP IMAGES</option>
+        </select>
+
+        <div id="setupTargetSpeedLabel" style="color: #aaa; font-size: 0.8rem; margin-bottom: 5px; text-align: left; font-weight: bold;">TARGET AVG SPEED (REGULARITY)</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #3d3d3d; padding: 10px; border-radius: 8px; margin-bottom: 20px;">
+            <button onclick="adjustTargetSpeed(-10)" style="background: #555; color: white; width: 45px; height: 45px; border-radius: 8px; font-size: 1rem;">-10</button>
+            <button onclick="adjustTargetSpeed(-1)" style="background: #555; color: white; width: 45px; height: 45px; border-radius: 8px; font-size: 1rem;">-1</button>
+            <div id="setupTargetSpeedValue" style="color: #fbbc05; font-size: 1.4rem; font-weight: bold; font-family: monospace; text-align: center; flex: 1;">OFF</div>
+            <button onclick="adjustTargetSpeed(1)" style="background: #555; color: white; width: 45px; height: 45px; border-radius: 8px; font-size: 1rem;">+1</button>
+            <button onclick="adjustTargetSpeed(10)" style="background: #555; color: white; width: 45px; height: 45px; border-radius: 8px; font-size: 1rem;">+10</button>
+        </div>
+
+        <button id="setupReviewBtn" class="start-btn" style="background: #bf953f; color: black; height: 50px; margin-bottom: 10px;" onclick="openStageReview()">STAGE REVIEW</button>
+        <button id="setupLoadBtn" class="start-btn" style="height: 50px; margin-bottom: 10px;" onclick="applyRouteSetup()">LOAD ROUTE</button>
+        <button id="setupCancelBtn" class="stop-btn" style="background: #555; height: 50px;" onclick="cancelRouteSetup()">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- WIPE CONFIRMATION MODAL -->
+    <div id="wipeConfirmModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="background: #2d2d2d; padding: 1.5rem; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; border: 2px solid #555;">
+            <div id="wipeModalTitle" style="color: #ea4335; font-size: 1.4rem; font-weight: bold; margin-bottom: 20px;">CLEAR ROUTE MEMORY?</div>
+            <div id="wipeModalText" style="color: white; font-size: 1rem; margin-bottom: 25px;">Are you sure you want to permanently delete the loaded route and all memory?</div>
+            <div style="display: flex; gap: 10px;">
+                <button id="wipeModalYesBtn" class="stop-btn" style="flex: 1; height: 50px; background: #8b0000; border: 1px solid #ff4444;" onclick="confirmWipeYes()">YES, WIPE</button>
+                <button id="wipeModalNoBtn" class="start-btn" style="flex: 1; height: 50px; background: #555;" onclick="confirmWipeNo()">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STAGE REVIEW CHART MODAL -->
+    <div id="stageReviewModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 10005; flex-direction: column;">
+        
+        <!-- Header Bar -->
+        <div style="padding: 10px 15px; background: #2d2d2d; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bf953f;">
+            <div style="color: #bf953f; font-size: 1.2rem; font-weight: bold; text-transform: uppercase;">Stage Review</div>
+            <button onclick="closeStageReview()" style="background: #ea4335; color: white; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold;">CLOSE</button>
+        </div>
+        
+        <!-- Top Pane: Altitude Chart -->
+        <div id="review-top-pane" style="height: 50%; border-bottom: 4px solid #bf953f; padding: 10px; box-sizing: border-box; background: #2d2d2d; position: relative;">
+            <canvas id="altitudeChart" style="width: 100% !important; height: 100% !important; touch-action: none;"></canvas>
+        </div>
+
+        <!-- Bottom Pane: Map & HUD -->
+        <div id="review-bottom-pane" style="height: 50%; width: 100%; position: relative;">
+            <div id="review-hud-box" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(20, 20, 20, 0.85); border: 2px solid #bf953f; border-radius: 12px; padding: 10px 15px; color: white; font-weight: bold; display: flex; flex-direction: column; gap: 5px; pointer-events: none; box-shadow: 0px 4px 10px rgba(0,0,0,0.5);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; font-size: 1.1rem;">
+                    <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase;">DIST</span>
+                    <span id="review-hud-dist" style="color: #fbbc05; font-family: monospace; font-size: 1.3rem;">0.00 km</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; font-size: 1.1rem;">
+                    <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase;">ALT</span>
+                    <span id="review-hud-alt" style="color: #fbbc05; font-family: monospace; font-size: 1.3rem;">0 m</span>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- REGULARITY SUMMARY MODAL -->
+    <div id="regularitySummaryModal">
+        <div class="reg-summary-content">
+            <button class="close-x-btn" onclick="document.getElementById('regularitySummaryModal').style.display='none'">X</button>
+            <div style="color: #bf953f; font-size: 1.2rem; font-weight: bold; margin-bottom: 15px;" id="regSummaryTargetSpeed">TARGET AVG SPEED: ---</div>
+            <div class="reg-table-container">
+                <table class="reg-table">
+                    <thead><tr><th>WP</th><th>TARGET</th><th>RESULT</th></tr></thead>
+                    <tbody id="regSummaryTableBody"></tbody>
+                </table>
+            </div>
+            <div style="background: #3d3d3d; padding: 10px; border-radius: 8px; margin-bottom: 5px;">
+                <div style="font-size: 0.8rem; color: #aaa; text-transform: uppercase;">Achieved Avg Speed</div>
+                <div id="regSummaryAchievedSpeed" style="color: #66b2ff; font-size: 1.4rem; font-weight: bold;">--- KM/H</div>
+            </div>
+        </div>
+    </div>
+
+<!-- MAP REVIEW FULL SCREEN MODAL -->
+<div id="mapReviewModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100000; flex-direction: column; overflow: hidden;">
+    
+    <!-- Header Bar -->
+    <div style="padding: 10px 15px; background: #2d2d2d; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bf953f; z-index: 100;">
+        <div style="color: #bf953f; font-size: 1.2rem; font-weight: bold; text-transform: uppercase;">Map Review</div>
+        <div style="display: flex; gap: 10px;">
+            <button id="locateMeBtn" onclick="toggleMapReviewTracking()" style="background: #1a73e8; color: white; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold;">LOCATE ME</button>
+            <button onclick="closeMapReview()" style="background: #ea4335; color: white; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold;">CLOSE</button>
+        </div>
+    </div>
+    
+    <!-- Map Container Wrapper (Oversized to hide spinning edges) -->
+    <div style="flex: 1; width: 100%; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <div id="fullScreenMap" style="width: 150vmax; height: 150vmax; position: absolute;"></div>
+    </div>
+    
+</div>
+
+<script>
+    let globalCompassHeading = 0; // Memory for the HUD arrow
+
+    // --- INSTANT FINISH BEEP ---
+    function playFinishBeep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch laser sound
+            osc.frequency.setValueAtTime(1760, ctx.currentTime + 0.15); // Higher pitch shift
+            gain.gain.setValueAtTime(1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.5);
+        } catch(e) {}
+    }
+
+    // --- COMPASS LOGIC ---
+    window.addEventListener("deviceorientationabsolute", (event) => {
+        let heading = null;
+        if (event.absolute && event.alpha !== null) {
+            heading = 360 - event.alpha; 
+        } else if (event.webkitCompassHeading) {
+            heading = event.webkitCompassHeading;
+        }
+
+        if (heading !== null) {
+            let finalHeading = Math.round(heading % 360);
+            if (finalHeading < 0) finalHeading += 360;
+            
+            globalCompassHeading = finalHeading; // Save quietly to memory, no screen updates here!
+        }
+    }, true);
+
+    let totalDist = 0, partialDist = 0, accumulatedTime = 0, maxSpeedAchieved = 0;
+    let watchId = null, lastCoords = null, timerInterval = null, sessionStartTime = null, wakeLock = null;
+    let isWaitingForAccuracy = false, trackPoints = [], waypoints = [], globalWpCounter = 1;
+    let isAutoPaused = false, stopTimeStart = null, resumeStrikeStartTime = null;
+    let currentMode = 'REC';
+    
+    let navWaypoints = [];
+    let navPathCoords = [];
+    let activeWpIndex = 0;
+    let loadedKmlName = "";
+    let lastOffTrackWarning = 0;
+    let navStarted = false;
+    let isOffTrack = false;
+    let wpMarkersHit = { p2km: false, p1km: false, p500: false, p150: false, p50: false };
+    let accuracyAchieved = false;
+    let isManualPaused = false;
+    
+    let offTrackAnchor = null; 
+    let isWrongWay = false;
+    let wrongWayInterval = null;
+    let rBtn = null;
+    let nBtn = null;
+
+    let upstreamAnchor = null;
+    let zeroSpeedAnchor = null;
+    let wasSpeedZeroTriggered = false;
+    let isAustereLoopRunning = false;
+
+    // Track when the last waypoint was triggered to apply the 30-meter stay visual delay
+    let clearedWpIndex = null;
+    let clearedWpLat = null;
+    let clearedWpLon = null;
+    
+    let regularityStamps = []; // Memory for waypoint timing
+
+    const ICONS = {
+        start: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Start-flag.png',
+        finish: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Flying-flag.png',
+        s: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Orange-marshal.png',
+        rp: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Yellow-thunder.png',
+        nos: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/1000-MIGLIA.png'
+    };
+
+    const GR_VOICE_TRANSLATIONS = {
+        "Session recovered from memory vault.": "Η διαδρομή ανακτήθηκε από τη μνήμη",
+        "Recording mode": "Καταγραφή διαδρομής",
+        "Navigation mode": "Λειτουργία πλοήγησης",
+        "WRONG WAY! YOU ARE DRIVING THE WRONG WAY IN THE SPECIAL STAGE! TURN THE CAR IMMEDIATELY": "Έκανες λάθος! Οδηγείς ανάποδα στην ειδική! Γύρνα το αυτοκίνητο αμέσως!",
+        "Listen to me! You are driving the wrong way in the special stage. It is dangerous, turn the car immediately!": "Άκουσέ με! Οδηγείς ανάποδα στην ειδική. Είναι επικίνδυνο, κάνε αναστροφή αμέσως!",
+        "CORRECT DIRECTION. GO!": "Σωστή πορεία. Φύγαμε!",
+        "Back on track, GO": "Μπήκες πάλι εντός διαδρομής. Πάμε!",
+        "Now you can go!": "Τώρα μπορείς να ξεκινήσεις!",
+        "The special stage has started": "Η ειδική διαδρομή μόλις ξεκίνησε",
+        "Stage joined mid path": "Είσοδος στην ειδική διαδρομή από ενδιάμεσο σημείο",
+        "You are off course, return back": "Είσαι εκτός διαδρομής, γύρνα πίσω",
+        "80 meters": "80 μέτρα",
+        "Paused": "Σε παύση",
+        "Resumed": "Συνέχεια",
+        "Waiting for GPS accuracy": "Αναμονή για ακρίβεια σήματος GPS",
+        "RECORDING PAUSED": "Παύση καταγραφής διαδρομής",
+        "Route not loaded. Wait for READY status.": "Η διαδρομή δεν έχει φορτωθεί. Περίμενε την ένδειξη ready.",
+        "PAUSING NAVIGATION": "Παύση πλοήγησης",
+        "STOPPING AND PREVIEWING STAGE": "Διακοπή και επισκόπηση ειδικής",
+        "Stage summary closed. Ready to resume recording.": "Η σύνοψη έκλεισε. Έτοιμο για συνέχιση καταγραφής.",
+        "Stage name saved": "Το όνομα της ειδικής αποθηκεύτηκε",
+        "Partial Reset": "Μερικός μηδενισμός",
+        "TOTAL KILOMETERS AND TIMER RESET": "Μηδενισμός ολικών και χρονομέτρου",
+        "Memory vault cleared from route.": "Η μνήμη της διαδρομής καθαρίστηκε."
+    };
+
+    function translateVoice(text) {
+        if (localStorage.getItem('stagemaster_language') !== 'el') return text;
+        if (GR_VOICE_TRANSLATIONS[text]) return GR_VOICE_TRANSLATIONS[text];
+
+        let t = text;
+        let m;
+        
+        if (m = t.match(/^(\d+) waypoints READY\.$/)) return `${m[1]} σημεία φορτώθηκαν`;
+        if (m = t.match(/^Next waypoint, (.+) in ([\d\.]+) kilometers$/)) return `Επόμενο σημείο, ${m[1]} σε ${m[2]} χιλιόμετρα`;
+        if (m = t.match(/^Re-synced\. Next waypoint, (.+)$/)) return `Επανασυγχρονισμός. Επόμενο σημείο, ${m[1]}`;
+        if (m = t.match(/^Approaching (.+) in 2 kilometers$/)) return `Πλησιάζεις τον ${m[1]} σε 2 χιλιόμετρα`;
+        if (m = t.match(/^Approaching (.+) in 1 kilometer$/)) return `Φτάνεις στον ${m[1]} σε 1 χιλιόμετρο`;
+        if (m = t.match(/^500 meters(.*)$/)) return `500 μέτρα${m[1]}`;
+        if (m = t.match(/^Approaching (.+) in 200 meters(.*)$/)) return `Πλησιάζεις τον ${m[1]} σε 200 μέτρα${m[2]}`;
+        if (t.startsWith("Arrived at ")) return `Άφιξη σε ${t.substring(11)}`;
+        if (m = t.match(/^Distance to (.+) is ([\d\.]+) kilometers$/)) return `Η απόσταση για ${m[1]} είναι ${m[2]} χιλιόμετρα`;
+        if (m = t.match(/^No Safety Marshal saved at ([\d\.]+) kilometers$/)) return `Το σημείο χωρίς φύλακα αποθηκεύτηκε στα ${m[1]} χιλιόμετρα`;
+        if (m = t.match(/^Radio Point (\d+) saved at ([\d\.]+) kilometers$/)) return `Ο Ενδιάμεσος Κριτής ${m[1]} αποθηκεύτηκε στα ${m[2]} χιλιόμετρα`;
+        if (m = t.match(/^S (\d+) saved at ([\d\.]+) kilometers$/)) return `Ο Φύλακας ${m[1]} αποθηκεύτηκε στα ${m[2]} χιλιόμετρα`;
+        
+        // --- REGULARITY TRANSLATIONS ---
+        if (t === "Average speed on target. Hold this pace.") return "Μέση ταχύτητα εντός στόχου. Κράτα ρυθμό.";
+        if (m = t.match(/^Average speed high by (\d+) kilometers per hour\. Slow down\.$/)) return `Η μέση ταχύτητα είναι υψηλή κατά ${m[1]} χιλιόμετρα την ώρα. Κόψε ρυθμό.`;
+        if (m = t.match(/^Average speed low by (\d+) kilometers per hour\. Pick up the pace\.$/)) return `Η μέση ταχύτητα είναι χαμηλή κατά ${m[1]} χιλιόμετρα την ώρα. Ανέβασε ρυθμό.`;
+        // -------------------------------
+
+        if (t.startsWith("Special Stage Finished!")) {
+            m = t.match(/^Special Stage Finished! Top speed: (\d+) kilometers per hour\. Average speed: ([\d\.]+)\. Time: ([\d:]+)\. Outstanding drive!$/);
+            if (m) return `Τερματισμός Ειδικής Διαδρομής! Μέγιστη ταχύτητα: ${m[1]} χιλιόμετρα την ώρα. Μέση ταχύτητα: ${m[2]}. Χρόνος: ${m[3]}. Καταπληκτική οδήγηση!`;
+            return `Τερματισμός Ειδικής Διαδρομής`;
+        }
+        return text;
+    }
+
+    function speak(t) { 
+        let translatedText = translateVoice(t);
+        let utterance = new SpeechSynthesisUtterance(translatedText);
+        
+        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        utterance.lang = isGreek ? 'el-GR' : 'en-US';
+        
+        let voices = window.speechSynthesis.getVoices();
+        let targetLang = isGreek ? 'el' : 'en';
+        let selectedVoice = voices.find(v => v.lang.startsWith(targetLang));
+        
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
+        }
+        
+        window.speechSynthesis.speak(utterance); 
+    }
+    
+    async function requestWakeLock() { 
+        if (!myCarId) return; // If Cancel was pressed on ID prompt, NEVER lock screen
+        try { 
+            if ('wakeLock' in navigator) { 
+                wakeLock = await navigator.wakeLock.request('screen'); 
+            } 
+        } catch (err) {} 
+    }
+    
+    function releaseWakeLock() { 
+        if (wakeLock !== null) { 
+            wakeLock.release().then(() => { wakeLock = null; }); 
+        } 
+    }
+
+    // Automatically re-apply the wake lock if the user minimizes and returns to the app
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+            requestWakeLock();
+        }
+    });
+
+    function formatWpName(name) {
+        let clean = name.split('|')[0].trim();
+        if (clean.toUpperCase().startsWith('RP')) return clean.replace(/RP/i, 'Radio Point ');
+        if (clean.toUpperCase().startsWith('S')) return clean.replace(/S/i, 'S ');
+        return clean;
+    }
+
+    // High Precision Text-to-Image Link & Base64 Data Harvester
+    function extractTulipImageUrl(descText) {
+        if (!descText) return null;
+        
+        // Priority 1: Match naked Base64 image data strings directly (Bypasses Google URL completely)
+        const base64Match = descText.match(/(data:image\/[a-zA-Z]*;base64,[^\s<>""']+)/i);
+        if (base64Match && base64Match[1]) return base64Match[1];
+
+        // Priority 2: Match standard HTML img tags embedded with src containing web URLs but exclude google hosted images
+        const imgTagMatch = descText.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgTagMatch && imgTagMatch[1] && !imgTagMatch[1].includes("usercontent.google.com")) {
+            return imgTagMatch[1];
+        }
+        
+        // Priority 3: Match naked non-Google URL parameters that link to standard image extensions
+        const urlMatch = descText.match(/(https?:\/\/[^\s<>""']+\.(?:png|jpg|jpeg|gif|webp))/i);
+        if (urlMatch && urlMatch[1] && !urlMatch[1].includes("usercontent.google.com")) {
+            return urlMatch[1];
+        }
+        
+        return null;
+    }
+
+    // Clears or populates the graphic container safely with 30m stay rule handling logic
+   // --- MAP ENGINE SETUP ---
+    let liveMap = null;
+    let mapCarMarker = null;
+    let competitorMarker = null;
+
+    function initMap() {
+        if (liveMap) return;
+        liveMap = L.map('liveMap', { zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false }).setView([38.052, 23.828], 18);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '' }).addTo(liveMap);
+        
+        let myUpperId = (myCarId || "").toUpperCase();
+        let myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
+        if (myUpperId.includes("MIV")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
+        else if (myUpperId.includes("AMB")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
+        else if (myUpperId.includes("PLAT")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
+        else if (myUpperId.includes("FIRE")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
+        else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
+        else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+
+        let carIcon = L.divIcon({
+            html: `<img id="mapCarImg" src="${myCarImgUrl}" style="width:60px;height:60px;transform: rotate(0deg); display: block !important; margin: auto; transition: transform 0.1s linear; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8));">`,
+            className: 'custom-car-div',
+            iconSize: [60, 60],
+            iconAnchor: [30, 30]
+        });
+        mapCarMarker = L.marker([38.052, 23.828], { icon: carIcon, zIndexOffset: 1000 }).addTo(liveMap);
+
+        if (!window.competitorMarkers) window.competitorMarkers = {};
+
+        database.ref('live_stage').on('value', (snapshot) => {
+            const allCars = snapshot.val();
+            if (!allCars || !liveMap) return;
+            
+            const now = Date.now();
+            
+            for (const carId in allCars) {
+                if (carId !== myCarId) {
+                    const compData = allCars[carId];
+                    
+                    // --- THE SOFT FIX: 2-Minute TTL Filter ---
+                    if (now - compData.timestamp > 120000) {
+                        if (window.competitorMarkers && window.competitorMarkers[carId]) {
+                            liveMap.removeLayer(window.competitorMarkers[carId]);
+                            delete window.competitorMarkers[carId];
+                        }
+                        continue; // Skip drawing this ghost car
+                    }
+
+                    // --- 15-SECOND SPEED CACHE LOGIC ---
+                    if (!window.cachedSpeeds) window.cachedSpeeds = {};
+                    let currentSpeed = Math.round(compData.speed || 0);
+                    
+                    if (!window.cachedSpeeds[carId] || (now - window.cachedSpeeds[carId].lastUpdate > 15000)) {
+                        window.cachedSpeeds[carId] = { speed: currentSpeed, lastUpdate: now };
+                    }
+                    let displaySpeed = window.cachedSpeeds[carId].speed;
+                    
+                    let compUpperId = carId.toUpperCase();
+                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+
+                    // Remove the black filter completely since the new Other.svg has its own high-visibility colors
+                    let compFilter = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
+
+                    // Build an icon dynamically so it includes the text label and speed
+                    let dynamicCompetitorIcon = L.divIcon({
+                        html: `<div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color:#fbbc05; font-size:12px;">${displaySpeed}km/h</span></div>
+                               <img src="${compCarImgUrl}" style="width:60px;height:60px; display: block !important; margin: auto; filter: ${compFilter}; position: relative; z-index: 1;">`,
+                        className: 'custom-car-div',
+                        iconSize: [90, 80], // Widened to fit the ID and Speed text cleanly
+                        iconAnchor: [45, 45] // Re-centered for the new 90px width
+                    });
+
+                    // Update existing marker or create a new one for each car
+                    if (!window.competitorMarkers[carId]) {
+                        window.competitorMarkers[carId] = L.marker([compData.lat, compData.lon], { icon: dynamicCompetitorIcon, zIndexOffset: 999 }).addTo(liveMap);
+                    } else {
+                        window.competitorMarkers[carId].setLatLng([compData.lat, compData.lon]);
+                        window.competitorMarkers[carId].setIcon(dynamicCompetitorIcon); 
+                    }
+                    // Timestamp for the Active Ghost Sweeper
+                    window.competitorMarkers[carId].lastActive = compData.timestamp;
+                }
+            }
+        });
+
+        // --- NEW: Active Ghost Sweeper (Checks every 10 seconds) ---
+        if (!window.ghostSweeperLive) {
+            window.ghostSweeperLive = setInterval(() => {
+                const checkTime = Date.now();
+                if (window.competitorMarkers) {
+                    for (const carId in window.competitorMarkers) {
+                        if (checkTime - window.competitorMarkers[carId].lastActive > 120000) {
+                            liveMap.removeLayer(window.competitorMarkers[carId]);
+                            delete window.competitorMarkers[carId];
+                        }
+                    }
+                }
+            }, 10000);
+        }
+    }
+
+   function renderTulipPreview(descText) {
+        const liveBox = document.getElementById('tulipLiveBox');
+        const liveImg = document.getElementById('tulipLiveImg');
+        const mapDiv = document.getElementById('liveMap');
+        
+        if (currentMode !== 'NAV' || !navStarted) {
+            liveBox.style.display = 'none';
+            liveImg.src = "";
+            if (mapDiv) mapDiv.style.display = 'none';
+            return;
+        }
+
+        // NEW: If Reverse Mode is active OR user selected Map view, bypass images and ALWAYS show the spinning map
+        if (window.isReverseMode || window.navigationViewPreference === 'map') {
+            liveImg.style.display = 'none';
+            liveImg.src = "";
+            if (mapDiv) mapDiv.style.display = 'block';
+            liveBox.style.display = 'flex';
+            if (!liveMap) initMap();
+            setTimeout(() => { liveMap.invalidateSize(); }, 100);
+            return;
+        }
+
+        let targetIndex = activeWpIndex;
+        if (clearedWpIndex !== null && navWaypoints[clearedWpIndex]) {
+            targetIndex = clearedWpIndex;
+        }
+
+        if (!navWaypoints[targetIndex]) {
+            liveBox.style.display = 'none';
+            liveImg.src = "";
+            if (mapDiv) mapDiv.style.display = 'none';
+            return;
+        }
+
+        let wpRawName = navWaypoints[targetIndex].name.split('|')[0].trim();
+        let imageUrl = null;
+
+        if (window.offlineImageCache && window.offlineImageCache[wpRawName]) {
+            imageUrl = window.offlineImageCache[wpRawName];
+        }
+        
+        if (!imageUrl) {
+            imageUrl = extractTulipImageUrl(navWaypoints[targetIndex].desc);
+        }
+
+        // We REMOVED the "blind guessing" block here so it doesn't force a broken image!
+
+        if (imageUrl) {
+            liveImg.src = imageUrl;
+            // Added safety net: if an image URL is bad, instantly hide it and show the map!
+            liveImg.onerror = function() {
+                this.style.display = 'none';
+                if (mapDiv) mapDiv.style.display = 'block';
+            };
+            liveImg.style.display = 'block';
+            if (mapDiv) mapDiv.style.display = 'none';
+            liveBox.style.display = 'flex';
+        } else {
+            liveImg.style.display = 'none';
+            liveImg.src = "";
+            if (mapDiv) mapDiv.style.display = 'block';
+            liveBox.style.display = 'flex';
+            
+            if (!liveMap) initMap();
+            setTimeout(() => { liveMap.invalidateSize(); }, 100);
+        }
+    }
+
+    function saveStateToVault() {
+        const state = {
+            totalDist, partialDist, accumulatedTime,
+            activeWpIndex, navStarted, currentMode,
+            globalWpCounter, trackPoints, waypoints,
+            navWaypoints, navPathCoords, wpMarkersHit,
+            isManualPaused, isAutoPaused, accuracyAchieved,
+            isOffTrack, offTrackAnchor, isWrongWay,
+            upstreamAnchor, zeroSpeedAnchor, wasSpeedZeroTriggered, isAustereLoopRunning,
+            clearedWpIndex, clearedWpLat, clearedWpLon,
+            isReverseMode: window.isReverseMode || false,
+            navigationViewPreference: window.navigationViewPreference || 'map',
+            targetAvgSpeed: window.targetAvgSpeed || 0,
+            regularityDistanceCounter: window.regularityDistanceCounter || 0,
+            isWalkMode: window.isWalkMode || false,
+            timestamp: Date.now()
+        };
+        localStorage.setItem('stagemaster_vault', JSON.stringify(state));
+    }
+
+    function checkStateRecovery() {
+        requestWakeLock(); // Attempt to lock the screen instantly when the app loads
+        
+        rBtn = document.getElementById('recToggleBtn');
+        nBtn = document.getElementById('navToggleBtn');
+        const vaultData = localStorage.getItem('stagemaster_vault');
+        if (!vaultData) return;
+        try {
+            const state = JSON.parse(vaultData);
+            if (Date.now() - state.timestamp > 7200000) {
+                localStorage.removeItem('stagemaster_vault');
+                return;
+            }
+            totalDist = state.totalDist;
+            partialDist = state.partialDist;
+            accumulatedTime = state.accumulatedTime;
+            activeWpIndex = state.activeWpIndex;
+            navStarted = state.navStarted;
+            globalWpCounter = state.globalWpCounter || 1;
+            trackPoints = state.trackPoints || [];
+            waypoints = state.waypoints || [];
+            navWaypoints = state.navWaypoints || [];
+            navPathCoords = state.navPathCoords || [];
+            wpMarkersHit = state.wpMarkersHit || wpMarkersHit;
+            isManualPaused = state.isManualPaused || false;
+            isAutoPaused = state.isAutoPaused || false;
+            accuracyAchieved = state.accuracyAchieved || false;
+            isOffTrack = state.isOffTrack || false;
+            offTrackAnchor = state.offTrackAnchor || null;
+            isWrongWay = state.isWrongWay || false;
+            upstreamAnchor = state.upstreamAnchor || null;
+            zeroSpeedAnchor = state.zeroSpeedAnchor || null;
+            wasSpeedZeroTriggered = state.wasSpeedZeroTriggered || false;
+            isAustereLoopRunning = state.isAustereLoopRunning || false;
+            clearedWpIndex = state.clearedWpIndex !== undefined ? state.clearedWpIndex : null;
+            clearedWpLat = state.clearedWpLat !== undefined ? state.clearedWpLat : null;
+            clearedWpLon = state.clearedWpLon !== undefined ? state.clearedWpLon : null;
+            window.isReverseMode = state.isReverseMode || false;
+            window.navigationViewPreference = state.navigationViewPreference || 'map';
+            window.targetAvgSpeed = state.targetAvgSpeed || 0;
+            window.regularityDistanceCounter = state.regularityDistanceCounter || 0;
+            window.isWalkMode = state.isWalkMode || false;
+
+            switchMode(state.currentMode || 'REC');
+
+            document.getElementById('total').innerText = totalDist.toFixed(2);
+            
+            if (currentMode === 'NAV' && isOffTrack && offTrackAnchor) {
+                document.getElementById('partialLabel').innerText = "Return to Track (Meters)";
+                document.getElementById('partial').innerText = "---";
+            } else {
+                document.getElementById('partial').innerText = partialDist.toFixed(2);
+            }
+
+            const ms = accumulatedTime;
+            const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000), s = Math.floor((ms%60000)/1000);
+            document.getElementById('timer').innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+
+            if (navWaypoints.length > 0) {
+                updateTargetDisplay();
+                if (navStarted) {
+                    if (clearedWpIndex !== null && navWaypoints[clearedWpIndex]) {
+                        renderTulipPreview(navWaypoints[clearedWpIndex].desc);
+                    } else if (navWaypoints[activeWpIndex]) {
+                        renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                    }
+                }
+            }
+
+            if (currentMode === 'REC') {
+                if (isManualPaused) {
+                    rBtn.innerText = "RESUME REC"; rBtn.className = "start-btn"; rBtn.style.background = "#34a853";
+                } else if (watchId) {
+                    rBtn.innerText = "PAUSE REC"; rBtn.className = "stop-btn"; rBtn.style.background = "#ea4335";
+                    startTimer();
+                }
+            } else if (currentMode === 'NAV') {
+                if (isManualPaused || (!watchId && navStarted)) {
+                    nBtn.innerText = "RESUME NAV"; nBtn.className = "start-btn"; nBtn.style.background = "#34a853";
+                } else if (watchId) {
+                    nBtn.innerText = "PAUSE NAV"; nBtn.className = "stop-btn"; nBtn.style.background = "#ea4335";
+                    if (navStarted) startTimer();
+                }
+            }
+            
+            if (isOffTrack || isWrongWay) document.body.classList.add('panic-mode');
+            if (isWrongWay && !wasSpeedZeroTriggered) triggerWrongWayAudioLoop();
+            
+            requestWakeLock();
+            speak("Session recovered from memory vault.");
+        } catch(e) {
+            localStorage.removeItem('stagemaster_vault');
+        }
+    }
+
+    function clearVault() {
+        localStorage.removeItem('stagemaster_vault');
+    }
+
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById('modeRec').classList.toggle('active', mode === 'REC');
+        document.getElementById('modeNav').classList.toggle('active', mode === 'NAV');
+        document.getElementById('recorderToolbar').style.display = (mode === 'REC') ? 'grid' : 'none';
+        document.getElementById('navControls').style.display = (mode === 'NAV') ? 'block' : 'none';
+        document.getElementById('wpTargetDisplay').style.display = (mode === 'NAV') ? 'block' : 'none';
+        document.getElementById('resetPartialBtn').style.display = (mode === 'REC') ? 'block' : 'none';
+        document.getElementById('totalLabel').innerText = (mode === 'NAV') ? 'Distance to Finish' : 'Total (HOLD 3S TO RESET)';
+        
+        rBtn = document.getElementById('recToggleBtn');
+        nBtn = document.getElementById('navToggleBtn');
+        if (mode === 'REC') {
+            rBtn.style.display = "block";
+            nBtn.style.display = "none";
+            document.getElementById('tulipLiveBox').style.display = 'none';
+        } else {
+            rBtn.style.display = "none";
+            nBtn.style.display = "block";
+            if (navStarted) {
+                if (clearedWpIndex !== null && navWaypoints[clearedWpIndex]) {
+                    renderTulipPreview(navWaypoints[clearedWpIndex].desc);
+                } else if (navWaypoints[activeWpIndex]) {
+                    renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                }
+            }
+        }
+
+        if (mode === 'NAV' && isOffTrack) {
+            document.getElementById('partialLabel').innerText = "Return to Track (Meters)";
+        } else if (mode === 'NAV' && isWrongWay) {
+            document.getElementById('partialLabel').innerText = "WRONG WAY!";
+        } else {
+            document.getElementById('partialLabel').innerText = (mode === 'NAV') ? 'Distance to WP' : 'Partial KM';
+        }
+
+        if (mode === 'REC' && typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+            document.getElementById('total').innerText = "0.00";
+            document.getElementById('partial').innerText = "0.00";
+        } else if (mode === 'REC') {
+            document.getElementById('total').innerText = totalDist.toFixed(2);
+            document.getElementById('partial').innerText = partialDist.toFixed(2);
+        }
+        
+        if (mode === 'NAV' && navWaypoints.length > 0) {
+            document.getElementById('importBtn').style.backgroundColor = "#34a853";
+            document.getElementById('importBtn').innerText = `COMPLETED: ${activeWpIndex} / ${navWaypoints.length}`;
+        } else if (mode === 'NAV') {
+            document.getElementById('importBtn').style.backgroundColor = "#1a73e8";
+            document.getElementById('importBtn').innerText = "IMPORT KML PATH";
+        }
+        updateTargetDisplay();
+        speak(mode === 'REC' ? "Recording mode" : "Navigation mode");
+    }
+
+    let rawWaypoints = [];
+    let rawPathCoords = [];
+
+    function findClosestRawPathIndex(lat, lon) {
+        let minD = 999, closestIdx = 0;
+        for (let i = 0; i < rawPathCoords.length; i++) {
+            let d = calculateHaverDist(lat, lon, rawPathCoords[i].lat, rawPathCoords[i].lon);
+            if (d < minD) { minD = d; closestIdx = i; }
+        }
+        return closestIdx;
+    }
+
+    async function startImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        loadedKmlName = file.name;
+        const btn = document.getElementById('importBtn');
+        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        btn.innerText = isGreek ? "ΑΝΑΓΝΩΣΗ..." : "PRE-LOADING...";
+        
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            // --- NEW: Save the raw KML for the Stage Review & clear old chart data ---
+            window.uploadedKmlText = e.target.result; 
+            if (typeof reviewRouteData !== 'undefined') {
+                reviewRouteData = []; 
+            }
+            // ------------------------------------------------------------------------
+
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+            rawWaypoints = [];
+            rawPathCoords = [];
+
+            const placemarks = xmlDoc.getElementsByTagName("Placemark");
+            for (let i = 0; i < placemarks.length; i++) {
+                const name = placemarks[i].getElementsByTagName("name")[0]?.textContent || "";
+                const descNode = placemarks[i].getElementsByTagName("description")[0];
+                const description = descNode ? descNode.textContent.trim() : "";
+                
+                const point = placemarks[i].getElementsByTagName("Point")[0];
+                if (point) {
+                    const coords = point.getElementsByTagName("coordinates")[0].textContent.trim().split(",");
+                    let wpType = "";
+                    let searchStr = (name + " " + description).toUpperCase();
+                    if (/\bRP\d*\b/.test(searchStr)) wpType = "RP";
+                    else if (/\bNO\s?S\d*\b/.test(searchStr) || /\b1000\s?MIGLIA\b/.test(searchStr)) wpType = "NOS";
+                    else if (/\bMARSHAL\d*\b/.test(searchStr) || /\bS\d*\b/.test(searchStr)) wpType = "MARSHAL";
+                    rawWaypoints.push({ name: name, desc: description, type: wpType, lon: parseFloat(coords[0]), lat: parseFloat(coords[1]) });
+                }
+
+                const line = placemarks[i].getElementsByTagName("LineString")[0];
+                if (line) {
+                    const pts = line.getElementsByTagName("coordinates")[0].textContent.trim().split(/\s+/);
+                    pts.forEach(p => {
+                        if (p.trim()) {
+                            const c = p.split(",");
+                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]) });
+                        }
+                    });
+                }
+            }
+
+            if (rawPathCoords.length === 0) {
+                const globalLines = xmlDoc.getElementsByTagName("LineString");
+                for (let j = 0; j < globalLines.length; j++) {
+                    const pts = globalLines[j].getElementsByTagName("coordinates")[0].textContent.trim().split(/\s+/);
+                    pts.forEach(p => {
+                        if (p.trim()) {
+                            const c = p.split(",");
+                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]) });
+                        }
+                    });
+                }
+            }
+
+            // THE FIX STEP 3: Automatically inject virtual points every 30 meters (0.030 km)
+            rawPathCoords = densifyPath(rawPathCoords, 0.030);
+
+            // Populate the Dropdown Modal
+            const select = document.getElementById('setupEntryPoint');
+            select.innerHTML = '';
+            rawWaypoints.forEach((wp, index) => {
+                let wpCleanName = wp.name.split('|')[0].trim();
+                let option = document.createElement('option');
+                option.value = index;
+                option.text = wpCleanName;
+                select.appendChild(option);
+            });
+
+            // Translate Modal if Greek
+            if (isGreek) {
+                document.getElementById('setupModalTitle').innerText = "ΡΥΘΜΙΣΕΙΣ ΕΙΔΙΚΗΣ";
+                document.getElementById('setupDirectionLabel').innerText = "ΚΑΤΕΥΘΥΝΣΗ";
+                document.getElementById('setupEntryPointLabel').innerText = "ΣΗΜΕΙΟ ΕΙΣΟΔΟΥ";
+                let viewLabel = document.getElementById('setupNavViewLabel');
+                if (viewLabel) viewLabel.innerText = "ΟΨΗ ΠΛΟΗΓΗΣΗΣ";
+                document.getElementById('setupLoadBtn').innerText = "ΦΟΡΤΩΣΗ ΔΙΑΔΡΟΜΗΣ";
+                document.getElementById('setupCancelBtn').innerText = "ΑΚΥΡΩΣΗ";
+                let dirSelect = document.getElementById('setupDirection');
+                dirSelect.options[0].text = "ΚΑΝΟΝΙΚΗ (Εκκίνηση προς Τερματισμό)";
+                dirSelect.options[1].text = "ΑΝΑΠΟΔΑ (Απενεργοποίηση Συναγερμού)";
+                let viewSelect = document.getElementById('setupNavView');
+                if (viewSelect) {
+                    viewSelect.options[0].text = "ΧΡΗΣΗ ΧΑΡΤΗ (Προεπιλογή)";
+                    viewSelect.options[1].text = "ΕΙΚΟΝΕΣ TULIP";
+                }
+                let speedLabel = document.getElementById('setupTargetSpeedLabel');
+                if (speedLabel) speedLabel.innerText = "ΜΕΣΗ ΤΑΧΥΤΗΤΑ (REGULARITY)";
+                let speedValue = document.getElementById('setupTargetSpeedValue');
+                if (speedValue && window.targetAvgSpeed === 0) speedValue.innerText = "ΑΝΕΝΕΡΓΟ";
+            }
+
+            document.getElementById('entrySetupModal').style.display = 'flex';
+            document.getElementById('kmlInput').value = ""; 
+        };
+        reader.readAsText(file);
+    }
+
+    function cancelRouteSetup() {
+        document.getElementById('entrySetupModal').style.display = 'none';
+        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        const btn = document.getElementById('importBtn');
+        btn.innerText = isGreek ? "ΕΙΣΑΓΩΓΗ ΔΙΑΔΡΟΜΗΣ KML" : "IMPORT KML PATH";
+        btn.style.backgroundColor = "#1a73e8";
+    }
+
+    window.targetAvgSpeed = 0; // 0 means OFF
+
+    function adjustTargetSpeed(delta) {
+        window.targetAvgSpeed += delta;
+        
+        // Prevent negative speeds
+        if (window.targetAvgSpeed <= 0) {
+            window.targetAvgSpeed = 0;
+            let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+            document.getElementById('setupTargetSpeedValue').innerText = isGreek ? "ΑΝΕΝΕΡΓΟ" : "OFF";
+        } else {
+            document.getElementById('setupTargetSpeedValue').innerText = window.targetAvgSpeed + " KM/H";
+        }
+    }
+
+    function autoSelectEntryPoint() {
+        let dir = document.getElementById('setupDirection').value;
+        let select = document.getElementById('setupEntryPoint');
+        
+        if (dir === 'reverse') {
+            // Find the Flying Finish waypoint index
+            let flyingIndex = -1;
+            for (let i = 0; i < rawWaypoints.length; i++) {
+                if (rawWaypoints[i].name.toUpperCase().includes("FLYING") || rawWaypoints[i].name.toUpperCase().includes("FINISH")) {
+                    flyingIndex = i;
+                    break;
+                }
+            }
+            // Fallback to the very last point if "FLYING" isn't explicitly in the name
+            if (flyingIndex === -1 && rawWaypoints.length > 0) {
+                flyingIndex = rawWaypoints.length - 1;
+            }
+            
+            // Set the dropdown to the found point
+            if (flyingIndex !== -1) {
+                select.value = flyingIndex;
+            }
+        } else {
+            // If NORMAL, automatically default back to the first point (Start)
+            if (rawWaypoints.length > 0) {
+                select.value = 0;
+            }
+        }
+    }
+
+    async function applyRouteSetup() {
+        document.getElementById('entrySetupModal').style.display = 'none';
+        
+        let dir = document.getElementById('setupDirection').value;
+        let wpIndex = parseInt(document.getElementById('setupEntryPoint').value);
+        let navView = document.getElementById('setupNavView').value;
+        
+        window.isReverseMode = (dir === 'reverse');
+        window.navigationViewPreference = navView;
+        
+        if (window.isReverseMode) {
+            navWaypoints = rawWaypoints.slice(0, wpIndex + 1).reverse();
+            let pIdx = findClosestRawPathIndex(rawWaypoints[wpIndex].lat, rawWaypoints[wpIndex].lon);
+            navPathCoords = rawPathCoords.slice(0, pIdx + 1).reverse();
+        } else {
+            navWaypoints = rawWaypoints.slice(wpIndex);
+            let pIdx = findClosestRawPathIndex(rawWaypoints[wpIndex].lat, rawWaypoints[wpIndex].lon);
+            navPathCoords = rawPathCoords.slice(pIdx);
+        }
+
+        const btn = document.getElementById('importBtn');
+        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        btn.innerText = isGreek ? "ΛΗΨΗ ΔΕΔΟΜΕΝΩΝ..." : "CACHING DATA...";
+
+        let repoName = loadedKmlName.replace(".kml", "").trim();
+        const baseUrl = `https://raw.githubusercontent.com/Pilirallyapp/${repoName}/main/`;
+        
+        window.offlineImageCache = {}; 
+        
+        await Promise.all(navWaypoints.map(async (wp) => {
+            let wpRawName = wp.name.split('|')[0].trim();
+            let url = `${baseUrl}${wpRawName}.png`;
+            try {
+                let response = await fetch(url);
+                if (response.ok) {
+                    let blob = await response.blob();
+                    window.offlineImageCache[wpRawName] = URL.createObjectURL(blob);
+                }
+            } catch (err) {}
+        }));
+
+        activeWpIndex = 0;
+        navStarted = false;
+        accuracyAchieved = false;
+        isManualPaused = false;
+        isOffTrack = false;
+        offTrackAnchor = null;
+        stopWrongWayAudioLoop();
+        upstreamAnchor = null;
+        zeroSpeedAnchor = null;
+        wasSpeedZeroTriggered = false;
+        isAustereLoopRunning = false;
+        clearedWpIndex = null;
+        clearedWpLat = null;
+        clearedWpLon = null;
+        window.isWalkMode = false; // RESET WALK MODE FOR NEW ROUTE
+        regularityStamps = [];
+        
+        document.getElementById('tulipLiveBox').style.display = 'none';
+        document.body.classList.remove('panic-mode');
+        
+        // --- DRAW ROUTE ON LEAFLET MAP ---
+        if (typeof liveMap === 'undefined' || !liveMap) {
+            if (typeof initMap === 'function') initMap();
+        }
+        
+        // 1. Clear old red line
+        if (liveMap && window.mapRouteLine) {
+            liveMap.removeLayer(window.mapRouteLine);
+        }
+        
+        // 2. Clear old waypoint markers if they exist
+        if (window.mapWpMarkers && window.mapWpMarkers.length > 0) {
+            window.mapWpMarkers.forEach(marker => liveMap.removeLayer(marker));
+        }
+        window.mapWpMarkers = [];
+
+        // 3. Draw new red line and add the fixed-size icons
+        if (liveMap && navPathCoords.length > 0) {
+            let latlngs = navPathCoords.map(pt => [pt.lat, pt.lon]);
+            window.mapRouteLine = L.polyline(latlngs, { color: '#ea4335', weight: 6, opacity: 0.8 }).addTo(liveMap);
+            
+            // Loop through loaded waypoints to place icons
+            navWaypoints.forEach((wp) => {
+                let iconUrl = null;
+                let searchStr = (wp.name + " " + wp.desc).toUpperCase();
+                
+                // Match the waypoint type to your existing ICONS dictionary
+                if (searchStr.includes("START")) iconUrl = ICONS.start;
+                else if (searchStr.includes("FLYING") || searchStr.includes("FINISH")) iconUrl = ICONS.finish;
+                else if (wp.type === "RP") iconUrl = ICONS.rp;
+                else if (wp.type === "NOS") iconUrl = ICONS.nos;
+                else if (wp.type === "MARSHAL") iconUrl = ICONS.s;
+
+                // If we found a matching icon, build it and pin it to the map
+                if (iconUrl) {
+                    let isMiglia = (wp.type === "NOS");
+                    let customIcon = L.icon({
+                        iconUrl: iconUrl,
+                        iconSize: isMiglia ? [55, 55] : [35, 35], // 55x55 for 1000 Miglia, 35x35 for others
+                        iconAnchor: isMiglia ? [27, 27] : [17, 17] // Keeps the center pinned
+                    });
+                    
+                    // Add it to the map with a zIndex so it sits above the red line
+                    let marker = L.marker([wp.lat, wp.lon], { icon: customIcon, zIndexOffset: 500 }).addTo(liveMap);
+                    window.mapWpMarkers.push(marker); // Save it so we can delete it on the next import
+                }
+            });
+        }
+        
+        updateTargetDisplay();
+        saveStateToVault();
+        
+        window.appIsReady = true;
+        btn.style.backgroundColor = "#34a853";
+        btn.innerText = isGreek ? `ΕΤΟΙΜΟ: ${navWaypoints.length} ΣΗΜΕΙΑ` : `READY: ${navWaypoints.length} WP`;
+        
+        speak(navWaypoints.length + " waypoints READY.");
+        
+        if (typeof updateWpCounters === 'function') {
+            updateWpCounters();
+        }
+        document.getElementById('wipeBtn').style.display = 'block';
+    }
+
+    // --- REGULARITY HUD LOGIC ---
+    window.isRegularityFlashActive = false;
+    window.regularityFlashTimeout = null;
+
+    function formatMsToTime(ms) {
+        if (ms <= 0) return "00:00:00";
+        let totalSec = Math.round(ms / 1000);
+        let h = Math.floor(totalSec / 3600);
+        let m = Math.floor((totalSec % 3600) / 60);
+        let s = totalSec % 60;
+        return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function buildRegularitySummaryTable() {
+        const isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        document.getElementById('regSummaryTargetSpeed').innerText = isGreek ? 
+            `ΣΤΟΧΟΣ Μ.Ω: ${window.targetAvgSpeed} KM/H` : `TARGET AVG SPEED: ${window.targetAvgSpeed} KM/H`;
+        
+        let finalAvg = document.getElementById('speed').innerText;
+        document.getElementById('regSummaryAchievedSpeed').innerText = `${finalAvg} KM/H`;
+
+        const tbody = document.getElementById('regSummaryTableBody');
+        tbody.innerHTML = '';
+
+        regularityStamps.forEach(stamp => {
+            let deltaSec = Math.round((stamp.actualMs - stamp.targetMs) / 1000);
+            let absSec = Math.abs(deltaSec);
+            
+            let resultText = "";
+            let resultColor = "";
+            
+            if (absSec <= 2) {
+                resultText = isGreek ? "ΤΕΛΕΙΟΣ" : "ON TARGET";
+                resultColor = "#34a853";
+            } else if (deltaSec > 2) {
+                resultText = isGreek ? `+${absSec} ΔΕΥΤ (ΑΡΓΑ)` : `+${absSec} SEC LATE`;
+                resultColor = "#ea4335";
+            } else {
+                resultText = isGreek ? `-${absSec} ΔΕΥΤ (ΝΩΡΙΣ)` : `-${absSec} SEC EARLY`;
+                resultColor = "#d500f9";
+            }
+
+            let cleanName = formatWpName(stamp.wpName);
+            let targetFormatted = formatMsToTime(stamp.targetMs);
+
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight: bold;">${cleanName}</td>
+                <td>${targetFormatted}</td>
+                <td style="color: ${resultColor}; font-weight: bold; font-size: 0.8rem;">${resultText}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('regularitySummaryModal').style.display = 'flex';
+    }
+
+    function getBogeyTimeMs(wpIndex) {
+        if (window.targetAvgSpeed <= 0 || !navWaypoints[wpIndex] || navWaypoints.length === 0) return 0;
+        let startWpPathIdx = findClosestPathIndex(navWaypoints[0].lat, navWaypoints[0].lon);
+        let targetWpPathIdx = findClosestPathIndex(navWaypoints[wpIndex].lat, navWaypoints[wpIndex].lon);
+        let distFromStart = calculateDistanceAlongPath(startWpPathIdx, targetWpPathIdx);
+        return (distFromStart / window.targetAvgSpeed) * 3600000;
+    }
+
+    function updateRegularityHUD() {
+        const hud = document.getElementById('regularityHud');
+        if (!hud) return;
+        
+        if (currentMode !== 'NAV' || window.targetAvgSpeed <= 0 || !navStarted || window.isPostFlying) {
+            if (!window.isRegularityFlashActive) hud.style.display = 'none';
+            return;
+        }
+        
+        if (window.isRegularityFlashActive) return; // Don't overwrite an active flash
+
+        let bogeyMs = getBogeyTimeMs(activeWpIndex);
+        if (bogeyMs > 0) {
+            hud.style.display = 'block';
+            let sTotal = Math.round(bogeyMs / 1000);
+            let m = Math.floor(sTotal / 60);
+            let s = sTotal % 60;
+            let wpCleanName = formatWpName(navWaypoints[activeWpIndex].name);
+            hud.style.color = "#66b2ff"; // Bright Blue text for normal target
+            hud.innerText = `TARGET [${wpCleanName}]: ${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        } else {
+            hud.style.display = 'none';
+        }
+    }
+
+    function triggerRegularityFlash(wpIndex) {
+        const hud = document.getElementById('regularityHud');
+        if (!hud || window.targetAvgSpeed <= 0) return;
+        
+        let bogeyMs = getBogeyTimeMs(wpIndex);
+        if (bogeyMs <= 0) return; 
+
+        let elapsedMs = accumulatedTime + (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+        let deltaSec = Math.round((elapsedMs - bogeyMs) / 1000);
+        let absSec = Math.abs(deltaSec);
+        
+        let flashText = "";
+        let flashColor = "";
+        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+
+        if (absSec <= 2) { 
+            flashText = isGreek ? "ΤΕΛΕΙΟΣ ΧΡΟΝΟΣ" : "PERFECT TIME";
+            flashColor = "#34a853"; // Green
+        } else if (deltaSec > 2) {
+            flashText = isGreek ? `${absSec} ΔΕΥΤ. ΑΡΓΑ` : `${absSec} SECONDS LATE`;
+            flashColor = "#ea4335"; // Red
+        } else {
+            flashText = isGreek ? `${absSec} ΔΕΥΤ. ΝΩΡΙΣ` : `${absSec} SECONDS EARLY`;
+            flashColor = "#d500f9"; // Purple
+        }
+
+        window.isRegularityFlashActive = true;
+        hud.style.display = 'block';
+        hud.style.color = flashColor;
+        hud.innerText = flashText;
+
+        if (window.regularityFlashTimeout) clearTimeout(window.regularityFlashTimeout);
+        window.regularityFlashTimeout = setTimeout(() => {
+            window.isRegularityFlashActive = false;
+            updateRegularityHUD();
+        }, 8000); // Flashes for 8 seconds
+    }
+    // ----------------------------
+
+    function updateTargetDisplay() {
+        if (currentMode !== 'NAV') return;
+        
+        if (!navStarted && navWaypoints.length > 0) {
+            if (window.isPostFlying) {
+                document.getElementById('wpTargetDisplay').innerText = "TARGET: STOP CONTROL";
+                return;
+            }
+            // The hardcoded "START GATE" override has been removed.
+            // The app will now fall through and dynamically display your chosen entry point.
+        }
+
+        if (navWaypoints[activeWpIndex]) {
+            let name = navWaypoints[activeWpIndex].name.split('|')[0].trim();
+            document.getElementById('wpTargetDisplay').innerText = "TARGET: " + name;
+        }
+        if (navWaypoints.length > 0) {
+            document.getElementById('importBtn').innerText = `COMPLETED: ${activeWpIndex} / ${navWaypoints.length}`;
+        }
+        
+        if (typeof updateRegularityHUD === 'function') updateRegularityHUD();
+    }
+
+    function calculateHaverDist(l1, lo1, l2, lo2) {
+        const R = 6371;
+        const dLat = (l2-l1)*Math.PI/180, dLon = (lo2-lo1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(l1*Math.PI/180)*Math.cos(l2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function findClosestPathIndex(lat, lon) {
+        let minD = 999, closestIdx = 0;
+        for (let i = 0; i < navPathCoords.length; i++) {
+            let d = calculateHaverDist(lat, lon, navPathCoords[i].lat, navPathCoords[i].lon);
+            if (d < minD) { minD = d; closestIdx = i; }
+        }
+        return closestIdx;
+    }
+
+    function findForwardNearestWaypointIndex(lat, lon) {
+        let targetIndex = activeWpIndex;
+        let minWpDist = 999;
+        for (let i = activeWpIndex; i < navWaypoints.length; i++) {
+            let d = calculateHaverDist(lat, lon, navWaypoints[i].lat, navWaypoints[i].lon);
+            if (d < minWpDist) {
+                minWpDist = d;
+                targetIndex = i;
+            }
+        }
+        return targetIndex;
+    }
+
+    function calculateDistanceAlongPath(startIdx, endIdx) {
+        let total = 0;
+        if (startIdx >= endIdx) return 0;
+        for (let i = startIdx; i < endIdx; i++) {
+            total += calculateHaverDist(navPathCoords[i].lat, navPathCoords[i].lon, navPathCoords[i+1].lat, navPathCoords[i+1].lon);
+        }
+        return total;
+    }
+
+    // THE FIX STEP 3: Add the Densification Engine here
+    function densifyPath(coords, maxGapKm) {
+        let denseCoords = [];
+        if (coords.length === 0) return denseCoords;
+        
+        denseCoords.push(coords[0]);
+        for (let i = 0; i < coords.length - 1; i++) {
+            let p1 = coords[i];
+            let p2 = coords[i+1];
+            let dist = calculateHaverDist(p1.lat, p1.lon, p2.lat, p2.lon);
+            
+            if (dist > maxGapKm) {
+                let steps = Math.ceil(dist / maxGapKm);
+                for (let j = 1; j <= steps; j++) {
+                    let fraction = j / steps;
+                    let interpolatedLat = p1.lat + (p2.lat - p1.lat) * fraction;
+                    let interpolatedLon = p1.lon + (p2.lon - p1.lon) * fraction;
+                    denseCoords.push({ lat: interpolatedLat, lon: interpolatedLon });
+                }
+            } else {
+                denseCoords.push(p2);
+            }
+        }
+        return denseCoords;
+    }
+
+    function triggerWrongWayAudioLoop() {
+        if (wrongWayInterval) return;
+        isAustereLoopRunning = false;
+        const alertPhrase = "WRONG WAY! YOU ARE DRIVING THE WRONG WAY IN THE SPECIAL STAGE! TURN THE CAR IMMEDIATELY";
+        speak(alertPhrase);
+        wrongWayInterval = setInterval(() => {
+            speak(alertPhrase);
+        }, 2000); 
+    }
+
+    function triggerAustereAudioLoop() {
+        if (wrongWayInterval) {
+            clearInterval(wrongWayInterval);
+            wrongWayInterval = null;
+        }
+        isAustereLoopRunning = true;
+        const austerePhrase = "Listen to me! You are driving the wrong way in the special stage. It is dangerous, turn the car immediately!";
+        speak(austerePhrase);
+        wrongWayInterval = setInterval(() => {
+            speak(austerePhrase);
+        }, 3000);
+    }
+
+    function stopWrongWayAudioLoop() {
+        if (wrongWayInterval) {
+            clearInterval(wrongWayInterval);
+            wrongWayInterval = null;
+        }
+        isWrongWay = false;
+        upstreamAnchor = null;
+        zeroSpeedAnchor = null;
+        wasSpeedZeroTriggered = false;
+        isAustereLoopRunning = false;
+    }
+
+    function announceCorrectDirectionDouble() {
+        const clearPhrase = "CORRECT DIRECTION. GO!";
+        speak(clearPhrase);
+        setTimeout(() => { speak(clearPhrase); }, 1200); 
+    }
+
+    function announceBackOnTrackDouble() {
+        const recoveryPhrase = "Back on track, GO";
+        speak(recoveryPhrase);
+        setTimeout(() => { speak(recoveryPhrase); }, 2000); 
+    }
+
+    // --- DYNAMIC ARROW MATH & LOGIC ---
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const toDeg = 180 / Math.PI;
+        const dLon = (lon2 - lon1) * toRad;
+        const y = Math.sin(dLon) * Math.cos(lat2 * toRad);
+        const x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) - Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLon);
+        return ((Math.atan2(y, x) * toDeg) + 360) % 360;
+    }
+
+    function triggerDynamicArrowHUD(lat, lon, currentSpeed, gpsHeading) {
+        const liveBox = document.getElementById('tulipLiveBox');
+        const liveImg = document.getElementById('tulipLiveImg');
+        const mapDiv = document.getElementById('liveMap');
+        if (currentMode !== 'NAV') return;
+
+        let arrowMode = false;
+        let targetBearing = 0;
+        let lockDownwards = false;
+
+        if (isWrongWay) {
+            arrowMode = true; lockDownwards = true;
+        } else if (isOffTrack && navPathCoords && navPathCoords.length > 0) {
+            arrowMode = true;
+            let closestIdx = findClosestPathIndex(lat, lon);
+            targetBearing = calculateBearing(lat, lon, navPathCoords[closestIdx].lat, navPathCoords[closestIdx].lon);
+        } else if (!navStarted && !window.isPostFlying && typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+            arrowMode = true;
+            targetBearing = calculateBearing(lat, lon, navWaypoints[0].lat, navWaypoints[0].lon);
+        }
+
+        if (arrowMode) {
+            liveImg.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23bf953f'><path d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z'/></svg>";
+            liveImg.classList.add('compass-arrow');
+            
+            // Force arrow visibility, hide map
+            liveImg.style.display = 'block';
+            if (mapDiv) mapDiv.style.display = 'none';
+            liveBox.style.display = 'flex';
+
+            if (lockDownwards) {
+                liveImg.style.transform = `rotate(180deg)`;
+            } else {
+                let activeHeading = globalCompassHeading;
+                if (currentSpeed > 2 && gpsHeading !== null) {
+                    activeHeading = gpsHeading;
+                }
+                let relativeRotation = targetBearing - activeHeading;
+                liveImg.style.transform = `rotate(${relativeRotation}deg)`;
+            }
+        } else if (liveImg.classList.contains('compass-arrow')) {
+            liveImg.classList.remove('compass-arrow');
+            liveImg.style.transform = 'rotate(0deg)';
+            
+            if (navStarted && navWaypoints[activeWpIndex]) {
+                let idx = (clearedWpIndex !== null && navWaypoints[clearedWpIndex]) ? clearedWpIndex : activeWpIndex;
+                renderTulipPreview(navWaypoints[idx].desc);
+            } else if (!navStarted) {
+                liveImg.style.display = 'none';
+                if (mapDiv) mapDiv.style.display = 'block';
+            }
+        }
+    }
+    // ----------------------------------
+
+    function updateStats(pos) {
+        const { latitude, longitude, accuracy, speed, altitude, heading } = pos.coords;
+        let curSpeed = speed ? speed * 3.6 : 0;
+        
+        // Top Speed Telemetry Tracker
+        if (navStarted && curSpeed > maxSpeedAchieved) {
+            maxSpeedAchieved = curSpeed;
+        }
+        
+        // Extract GPS heading provided by the device, or calculate it manually if missing
+        let gpsHeading = (heading !== null && !isNaN(heading)) ? heading : null;
+        if (gpsHeading === null && lastCoords) {
+            gpsHeading = calculateBearing(lastCoords.lat, lastCoords.lon, latitude, longitude);
+        }
+
+        // --- SMART COMPASS TEXT UPDATE ---
+        let activeHeading = globalCompassHeading;
+        if (curSpeed > 2 && gpsHeading !== null) {
+            activeHeading = Math.round(gpsHeading);
+        } else {
+            activeHeading = Math.round(globalCompassHeading);
+        }
+        
+        let direction = "N";
+        if (activeHeading >= 22.5 && activeHeading < 67.5) direction = "NE";
+        else if (activeHeading >= 67.5 && activeHeading < 112.5) direction = "E";
+        else if (activeHeading >= 112.5 && activeHeading < 157.5) direction = "SE";
+        else if (activeHeading >= 157.5 && activeHeading < 202.5) direction = "S";
+        else if (activeHeading >= 202.5 && activeHeading < 247.5) direction = "SW";
+        else if (activeHeading >= 247.5 && activeHeading < 292.5) direction = "W";
+        else if (activeHeading >= 292.5 && activeHeading < 337.5) direction = "NW";
+
+        const compassEl = document.getElementById('compass');
+        if (compassEl) {
+            compassEl.innerText = activeHeading + "° " + direction;
+        }
+        
+        // --- LIVE MULTIPLAYER LOCATION PUSH ---
+        // Decoupled: Moved to the background broadcaster at the end of the file
+        // to ensure it runs immediately on app load.
+        // --------------------------------------
+        // ---------------------------------
+        
+        // FIRE THE DYNAMIC ARROW
+        if (typeof triggerDynamicArrowHUD === 'function') {
+            triggerDynamicArrowHUD(latitude, longitude, curSpeed, gpsHeading);
+        }
+
+        // --- FEED MAP TRACKING (WRAPPED TO PREVENT LOOP CRASHES) ---
+        try {
+            if (typeof liveMap !== 'undefined' && liveMap) {
+                liveMap.invalidateSize(); 
+                
+                // --- DYNAMIC ZOOM LOGIC ---
+                let activeZoom = 18; // Default fallback zoom
+                if (currentMode === 'NAV' && !window.isPostFlying) {
+                    if (!navStarted) {
+                        // High zoom (15) while approaching the starting waypoint
+                        activeZoom = 15; 
+                    } else {
+                        // Dynamic zoom while stage is actively running
+                        let currentDistM = partialDist * 1000;
+                        if (currentDistM > 1000) {
+                            activeZoom = 15; // > 1KM
+                        } else if (currentDistM > 500) {
+                            activeZoom = 16; // 500m - 1KM
+                        } else if (currentDistM > 200) {
+                            activeZoom = 17; // 200m - 500m
+                        } else if (currentDistM > 80) {
+                            activeZoom = 17.5; // 80m - 200m
+                        } else {
+                            activeZoom = 18; // Under 80m (Final approach)
+                        }
+                    }
+                }
+
+                liveMap.setView([latitude, longitude], activeZoom); 
+                
+                // 1. Spin the map div directly (ugly corners will show!)
+                let mapDiv = document.getElementById('liveMap');
+                if (mapDiv) {
+                    mapDiv.style.transform = `rotate(${-activeHeading}deg)`;
+                    mapDiv.style.transition = 'transform 0.2s linear';
+                }
+
+                if (typeof mapCarMarker !== 'undefined' && mapCarMarker) {
+                    mapCarMarker.setLatLng([latitude, longitude]);
+                    let mapCarImg = document.getElementById('mapCarImg');
+                    if (mapCarImg) {
+                        // 2. Counter-spin the car so it stays locked pointing UP
+                        mapCarImg.style.transform = `rotate(${activeHeading}deg)`;
+                    }
+                }
+            }
+        } catch(e) { }
+        
+        let dist = lastCoords ? calculateHaverDist(lastCoords.lat, lastCoords.lon, latitude, longitude) : 0;
+
+        const currSpeedEl = document.getElementById('currSpeed');
+        const accEl = document.getElementById('accuracy');
+        
+        accEl.innerText = `Acc: ${accuracy.toFixed(1)}m`;
+        accEl.style.background = accuracy < 15 ? "#34a853" : "#ea4335";
+        currSpeedEl.innerText = Math.round(curSpeed);
+        
+        if (watchId && Math.random() < 0.1) { requestWakeLock(); }
+
+        if (isWaitingForAccuracy && accuracy <= 10) {
+            isWaitingForAccuracy = false; 
+            accuracyAchieved = true;
+            speak("Now you can go!");
+            document.getElementById('totalArea').classList.add('go-flash');
+            setTimeout(() => document.getElementById('totalArea').classList.remove('go-flash'), 5000);
+            
+            lastCoords = { lat: latitude, lon: longitude, ele: altitude || 0, time: Date.now() };
+            
+            if (currentMode === 'NAV' && navWaypoints.length > 0) {
+                if (navStarted) {
+                    // FIX: Path-based Catch-Up Sweep on Resume (Preserves Time & Total Dist)
+                    let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                    let foundNextWp = activeWpIndex;
+                    
+                    for (let i = activeWpIndex; i < navWaypoints.length; i++) {
+                        let wpPathIdx = findClosestPathIndex(navWaypoints[i].lat, navWaypoints[i].lon);
+                        if (wpPathIdx > currentPathIdx) {
+                            foundNextWp = i;
+                            break;
+                        }
+                    }
+                    activeWpIndex = foundNextWp;
+
+                    // Recalculate true path distance to the next waypoint
+                    if (navWaypoints[activeWpIndex]) {
+                        let targetWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                        partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
+                    }
+                // FIX: Protect the index from resetting if we are transiting to STOP
+                } else if (!window.isPostFlying) {
+                    activeWpIndex = 0;
+                }
+                
+                updateTargetDisplay();
+                
+                if (navStarted) {
+                    if (clearedWpIndex !== null && navWaypoints[clearedWpIndex]) {
+                        renderTulipPreview(navWaypoints[clearedWpIndex].desc);
+                    } else if (navWaypoints[activeWpIndex]) {
+                        renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                    }
+                }
+            }
+
+            if (currentMode === 'REC' && trackPoints.length === 0) {
+                sessionStartTime = Date.now(); 
+                startTimer();
+                mark('start');
+            } else if (currentMode === 'REC' || (currentMode === 'NAV' && navStarted)) {
+                sessionStartTime = Date.now();
+                startTimer();
+            }
+            saveStateToVault();
+            return;
+        }
+
+        if (currentMode === 'NAV' && navWaypoints.length > 0 && accuracyAchieved) {
+            const startPoint = navWaypoints[0];
+            const distToStartGate = calculateHaverDist(latitude, longitude, startPoint.lat, startPoint.lon);
+
+            // FIX: Radar is completely deactivated if we are in Post-Flying mode
+            if (!navStarted && !window.isPostFlying) {
+                // Determine if we are physically on the track but far from the start line
+                let minPathDist = 999;
+                if (navPathCoords.length > 0) {
+                    for (let pt of navPathCoords) {
+                        let d = calculateHaverDist(latitude, longitude, pt.lat, pt.lon);
+                        if (d < minPathDist) minPathDist = d;
+                    }
+                }
+
+                if (distToStartGate <= 0.010) { 
+                    // NORMAL START GATE ENTRANCE
+                    navStarted = true;
+                    sessionStartTime = Date.now();
+                    startTimer();
+                    speak("The special stage has started");
+                    window.regularityDistanceCounter = 0; // Fresh reset for Regularity
+                    activeWpIndex = 1;
+                    updateTargetDisplay();
+                    if (navWaypoints[activeWpIndex]) {
+                        renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                        
+                        let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                        let targetWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                        partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
+                        
+                        let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
+                        speak("Next waypoint, " + nextCleanName + " in " + partialDist.toFixed(2) + " kilometers");
+                    }
+                } else if (minPathDist <= 0.035 && distToStartGate > 0.050) {
+                    // HOT JOIN: MID-STAGE ENTRANCE
+                    navStarted = true;
+                    sessionStartTime = Date.now();
+                    startTimer();
+                    speak("Stage joined mid path");
+                    
+                    // Find the next upcoming waypoint based on the path direction
+                    let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                    let foundNextWp = 1;
+                    for (let i = 1; i < navWaypoints.length; i++) {
+                        let wpPathIdx = findClosestPathIndex(navWaypoints[i].lat, navWaypoints[i].lon);
+                        if (wpPathIdx > currentPathIdx) {
+                            foundNextWp = i;
+                            break;
+                        }
+                    }
+                    activeWpIndex = foundNextWp;
+                    updateTargetDisplay();
+                    
+                    if (navWaypoints[activeWpIndex]) {
+                        renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                        
+                        let targetWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                        partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
+                        
+                        let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
+                        speak("Next waypoint, " + nextCleanName + " in " + partialDist.toFixed(2) + " kilometers");
+                    }
+                } else {
+                    // WAITING TO START OR NOT ON TRACK
+                    document.getElementById('partial').innerText = distToStartGate.toFixed(2);
+                    document.getElementById('total').innerText = "0.00";
+                }
+            }
+
+            if (navStarted) {
+                let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                let finishPathIdx = navPathCoords.length - 1;
+                let trackDistanceToFinish = calculateDistanceAlongPath(currentPathIdx, finishPathIdx);
+                document.getElementById('total').innerText = trackDistanceToFinish.toFixed(2);
+
+                // FIX: Dynamic Visual Progress Bar on the Top Button
+                if (window.lastFinishIdx !== finishPathIdx) {
+                    window.fullStageDist = calculateDistanceAlongPath(0, finishPathIdx);
+                    window.lastFinishIdx = finishPathIdx;
+                }
+                if (window.fullStageDist > 0) {
+                    let progressPct = ((1 - (trackDistanceToFinish / window.fullStageDist)) * 100);
+                    progressPct = Math.round(progressPct / 5) * 5; // Snap to 5% increments
+                    if (progressPct > 100) progressPct = 100;
+                    if (progressPct < 0) progressPct = 0;
+                    
+                    document.getElementById('importBtn').style.background = `linear-gradient(to right, #34a853 ${progressPct}%, rgba(52, 168, 83, 0.3) ${progressPct}%)`;
+                    document.getElementById('importBtn').style.border = "1px solid #34a853"; // Keeps the button edge crisp
+                }
+
+                let minPathDist = 999;
+                for (let pt of navPathCoords) {
+                    let d = calculateHaverDist(latitude, longitude, pt.lat, pt.lon);
+                    if (d < minPathDist) minPathDist = d;
+                }
+
+                // --- GLOBAL WRONG WAY SILENCER ---
+                if (isWrongWay && curSpeed < 1.5) {
+                    if (wrongWayInterval) {
+                        clearInterval(wrongWayInterval);
+                        wrongWayInterval = null;
+                    }
+                    window.speechSynthesis.cancel(); 
+                    if (!wasSpeedZeroTriggered) {
+                        wasSpeedZeroTriggered = true;
+                        zeroSpeedAnchor = { lat: latitude, lon: longitude }; 
+                    }
+                }
+
+                if (minPathDist <= 0.035 && !isOffTrack && lastCoords) {
+                    let nextPathIdx = Math.min(currentPathIdx + 1, finishPathIdx);
+                    let angleDiff = 0;
+                    
+                    if (currentPathIdx !== nextPathIdx) {
+                        let dyTrack = navPathCoords[nextPathIdx].lat - navPathCoords[currentPathIdx].lat;
+                        let dxTrack = navPathCoords[nextPathIdx].lon - navPathCoords[currentPathIdx].lon;
+                        let trackBearing = Math.atan2(dyTrack, dxTrack) * 180 / Math.PI;
+
+                        let dyUser = latitude - lastCoords.lat;
+                        let dxUser = longitude - lastCoords.lon;
+                        let userBearing = Math.atan2(dyUser, dxUser) * 180 / Math.PI;
+
+                        angleDiff = Math.abs(userBearing - trackBearing);
+                        if (angleDiff > 180) angleDiff = 360 - angleDiff;
+                    }
+
+                    if (curSpeed >= 1.5) { // Only do heading logic if moving
+                        if (angleDiff > 145) { // Increased to 145 to allow 90-degree intersection exits
+                            if (!isWrongWay && !window.isReverseMode) {
+                                if (!upstreamAnchor) {
+                                    upstreamAnchor = { lat: lastCoords.lat, lon: lastCoords.lon };
+                                }
+                                let displacementM = calculateHaverDist(upstreamAnchor.lat, upstreamAnchor.lon, latitude, longitude) * 1000;
+                                // Increased to 15m to prevent false alarms on quick side roads
+                                if (displacementM >= 15) { 
+                                    isWrongWay = true;
+                                    wasSpeedZeroTriggered = false;
+                                    document.body.classList.add('panic-mode');
+                                    document.getElementById('partialLabel').innerText = "WRONG WAY!";
+                                    window.speechSynthesis.cancel(); 
+                                    triggerWrongWayAudioLoop();
+                                }
+                            } else if (wasSpeedZeroTriggered && zeroSpeedAnchor && !window.isReverseMode) {
+                                let secondaryDisplacementM = calculateHaverDist(zeroSpeedAnchor.lat, zeroSpeedAnchor.lon, latitude, longitude) * 1000;
+                                if (secondaryDisplacementM >= 10 && !isAustereLoopRunning) {
+                                    window.speechSynthesis.cancel(); 
+                                    triggerAustereAudioLoop();
+                                }
+                            }
+                        } else if (angleDiff < 90) {
+                            upstreamAnchor = null; 
+                            
+                            if (isWrongWay) {
+                                if (wrongWayInterval) {
+                                    clearInterval(wrongWayInterval);
+                                    wrongWayInterval = null;
+                                }
+                                window.speechSynthesis.cancel(); 
+                                
+                                if (!wasSpeedZeroTriggered) {
+                                    zeroSpeedAnchor = { lat: latitude, lon: longitude };
+                                    wasSpeedZeroTriggered = true; 
+                                }
+                                
+                                let recoveryDisplacementM = calculateHaverDist(zeroSpeedAnchor.lat, zeroSpeedAnchor.lon, latitude, longitude) * 1000;
+                                if (recoveryDisplacementM >= 15) { 
+                                    stopWrongWayAudioLoop();
+                                    document.body.classList.remove('panic-mode');
+                                    document.getElementById('partialLabel').innerText = "Distance to WP";
+                                    announceCorrectDirectionDouble();
+
+                                    // 1. Omnidirectional Sweep for U-Turns: Scan the whole path to find true position
+                                    let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                                    let foundNextWp = activeWpIndex;
+                                    
+                                    for (let i = 0; i < navWaypoints.length; i++) {
+                                        let wpPathIdx = findClosestPathIndex(navWaypoints[i].lat, navWaypoints[i].lon);
+                                        if (wpPathIdx > currentPathIdx) {
+                                            foundNextWp = i;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // 2. Snap to the newly found WP if it changed after driving backwards
+                                    if (foundNextWp !== activeWpIndex) {
+                                        activeWpIndex = foundNextWp;
+                                        updateTargetDisplay();
+                                        
+                                        if (navWaypoints[activeWpIndex]) {
+                                            renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                                            let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
+                                            speak("Re-synced. Next waypoint, " + nextCleanName);
+                                        }
+                                    }
+
+                                    // 3. THE FIX: ALWAYS recalculate the exact distance to that active waypoint
+                                    if (navWaypoints[activeWpIndex]) {
+                                        let targetWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                                        partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } // <--- Here is the 5th bracket that closes the giant minPathDist <= 0.035 block!
+
+                if (minPathDist > 0.08) { 
+                    if (isWrongWay) stopWrongWayAudioLoop(); 
+                    
+                    if (!isOffTrack) { 
+                        isOffTrack = true; 
+                        document.body.classList.add('panic-mode'); 
+                        document.getElementById('partialLabel').innerText = "Return to Track (Meters)";
+                        offTrackAnchor = { lat: latitude, lon: longitude }; 
+                    }
+                }
+
+                if (isOffTrack) {
+                    let currentActualDistM = minPathDist * 1000;
+                    document.getElementById('partial').innerText = "-" + Math.round(currentActualDistM);
+
+                    if (Date.now() - lastOffTrackWarning > 10000 && !isWrongWay) {
+                        speak("You are off course, return back");
+                        lastOffTrackWarning = Date.now();
+                    }
+
+                    if (minPathDist < 0.01) { 
+                        isOffTrack = false;
+                        offTrackAnchor = null;
+                        document.body.classList.remove('panic-mode');
+                        document.getElementById('partialLabel').innerText = "Distance to WP";
+                        announceBackOnTrackDouble(); 
+                        
+                        // FIX: Waypoint Catch-Up (Re-sync after returning to track)
+                        let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                        let foundNextWp = activeWpIndex;
+                        
+                        // FIX: Omnidirectional Sweep (Re-sync even if returning backwards on the stage)
+                        for (let i = 0; i < navWaypoints.length; i++) {
+                            let wpPathIdx = findClosestPathIndex(navWaypoints[i].lat, navWaypoints[i].lon);
+                            if (wpPathIdx > currentPathIdx) {
+                                foundNextWp = i;
+                                break;
+                            }
+                        }
+                        
+                        // 1. If we skipped waypoints, snap to the correct one and announce it
+                        if (foundNextWp !== activeWpIndex) {
+                            activeWpIndex = foundNextWp;
+                            updateTargetDisplay();
+
+                            if (navWaypoints[activeWpIndex]) {
+                                renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                                
+                                let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
+                                speak("Re-synced. Next waypoint, " + nextCleanName);
+                            }
+                        }
+
+                        // 2. THE FIX: ALWAYS recalculate the distance to the active waypoint when back on track
+                        if (navWaypoints[activeWpIndex]) {
+                            let targetWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                            partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
+                        }
+                    }
+                }
+
+                // 30-Meter Stay-on-Screen Evaluation Framework
+                if (clearedWpIndex !== null && clearedWpLat !== null && clearedWpLon !== null) {
+                    let distanceFromClearedM = calculateHaverDist(latitude, longitude, clearedWpLat, clearedWpLon) * 1000;
+                    if (distanceFromClearedM >= 30) {
+                        clearedWpIndex = null;
+                        clearedWpLat = null;
+                        clearedWpLon = null;
+                        if (activeWpIndex < navWaypoints.length) {
+                            renderTulipPreview(navWaypoints[activeWpIndex].desc);
+                        }
+                    }
+                }
+
+                if (!isOffTrack && !isWrongWay) {
+                    const target = navWaypoints[activeWpIndex];
+                    if (target) {
+                        // FIX: Apply the 2-meter noise gate to prevent GPS drift while stopped
+                        if (dist > 0.002) {
+                            partialDist -= dist; 
+                        }
+                        
+                        // FIX: "Endless Loop" Safety Net. Path distance can never be physically shorter than a straight line.
+                        // If path math inverses, this instantly heals the variable and stops false triggers.
+                        let directDist = calculateHaverDist(latitude, longitude, target.lat, target.lon);
+                        if (partialDist < directDist) {
+                            partialDist = directDist;
+                        }
+                        
+                        if (partialDist < 0) partialDist = 0;
+                        const distToWp = partialDist;
+                        document.getElementById('partial').innerText = distToWp.toFixed(2);
+                        
+                        const distM = distToWp * 1000;
+                        const cleanName = formatWpName(target.name);
+                        
+                        const cleanNote = target.desc ? target.desc.replace(/<[^>]*>/g, '').trim() : "";
+                        // Mutes the specific pacenote instruction if in reverse mode, but keeps the distance!
+                        const tulipNote = (cleanNote && !window.isReverseMode) ? `, ${cleanNote}` : "";
+
+                        // Audio latency offset for Greek language (20 meters = ~1 second head start at 80 km/h)
+                        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+                        let offset = isGreek ? 20 : 0; 
+
+                        if (distM <= (2000 + offset) && distM > (1950 + offset) && !wpMarkersHit.p2km) {
+                            speak("Approaching " + cleanName + " in 2 kilometers");
+                            wpMarkersHit.p2km = true;
+                        }
+                        if (distM <= (1000 + offset) && distM > (950 + offset) && !wpMarkersHit.p1km) {
+                            speak("Approaching " + cleanName + " in 1 kilometer");
+                            wpMarkersHit.p1km = true;
+                        }
+                        if (distM <= (500 + offset) && distM > (450 + offset) && !wpMarkersHit.p500) { 
+                            speak("500 meters" + tulipNote);
+                            wpMarkersHit.p500 = true;
+                        }
+                        if (distM <= (200 + offset) && distM > (190 + offset) && !wpMarkersHit.p150) { 
+                            speak("Approaching " + cleanName + " in 200 meters" + tulipNote);
+                            wpMarkersHit.p150 = true;
+                        }
+                        if (distM <= (80 + offset) && distM > (70 + offset) && !wpMarkersHit.p50) { 
+                            speak("80 meters");
+                            wpMarkersHit.p50 = true;
+                        }
+                        
+                        // --- DYNAMIC WALK MODE LOCK ---
+                        // activeWpIndex is 1 when heading to the very first waypoint. 
+                        // Once we pass it (index 2+), the mode permanently locks.
+                        if (activeWpIndex <= 1) {
+                            window.isWalkMode = (maxSpeedAchieved < 10);
+                        }
+
+                        // UNIVERSAL END LINE: Checks name OR if it is the absolute final waypoint of the stage
+                        let isEndLine = target.name.toUpperCase().includes("FLYING") || target.name.toUpperCase().includes("FINISH") || (activeWpIndex === navWaypoints.length - 1);
+                        let baseTrigger = isEndLine ? 10 : 35;
+
+                        // --- APPLY WALKING RECALIBRATION ---
+                        if (window.isWalkMode) {
+                            baseTrigger = 7; 
+                            offset = 0; // Completely disable language latency for walking
+                        }
+
+                        let triggerDist = baseTrigger + (isEndLine ? 0 : offset); // Never offset the finish beep
+
+                        if (distM <= triggerDist) {
+                            
+                            // --- REGULARITY PENALTY FLASH ---
+                        if (typeof triggerRegularityFlash === 'function') {
+                            triggerRegularityFlash(activeWpIndex);
+                        }
+                        // --------------------------------
+
+                        // --- REGULARITY TIME STAMPING ---
+                        if (window.targetAvgSpeed > 0 && currentMode === 'NAV') {
+                            let bogeyMs = getBogeyTimeMs(activeWpIndex);
+                            let elapsedMs = accumulatedTime + (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+                            regularityStamps.push({
+                                wpName: target.name,
+                                targetMs: bogeyMs,
+                                actualMs: elapsedMs
+                            });
+                        }
+                        // --------------------------------
+
+                        if (isEndLine) {
+                                // 1. Instant Millisecond Laser Beep
+                                playFinishBeep();
+                                
+                                // 2. Ignite Fireworks Visuals on Tulip Box
+                                const tulipBox = document.getElementById('tulipLiveBox');
+                                tulipBox.classList.add('fireworks-active');
+                                setTimeout(() => { tulipBox.classList.remove('fireworks-active'); }, 10000); // Burns out after 10s
+
+                                // 3. Telemetry Collection
+                                let finalTime = document.getElementById('timer').innerText;
+                                let finalAvgSpeed = document.getElementById('speed').innerText;
+                                
+                                // 4. The Grand Announcement
+                            speak("Special Stage Finished! Top speed: " + Math.round(maxSpeedAchieved) + " kilometers per hour. Average speed: " + finalAvgSpeed + ". Time: " + finalTime + ". Outstanding drive!");
+
+                            // --- SHOW REGULARITY SUMMARY ---
+                            if (window.targetAvgSpeed > 0) {
+                                buildRegularitySummaryTable();
+                            }
+
+                            activeWpIndex++; 
+                                updateTargetDisplay();
+                                
+                                if (sessionStartTime) accumulatedTime += (Date.now() - sessionStartTime);
+                                sessionStartTime = null;
+                                navStarted = false;
+                                
+                                // Reset Telemetry for next stage
+                                maxSpeedAchieved = 0;
+                                
+                                // FIX: Enter Post-Flying mode to track distance to STOP
+                                window.isPostFlying = true;
+                                partialDist = 0; 
+                                document.getElementById('partialLabel').innerText = "TO STOP (KM)";
+                                document.getElementById('partial').innerText = "0.00"; 
+                                document.getElementById('total').innerText = "0.00";
+                                
+                                let navBtn = document.getElementById('navToggleBtn');
+                                navBtn.innerText = "STAGE FINISHED";
+                                navBtn.className = "start-btn";
+                                navBtn.style.background = "#555";
+                                return;
+                            } else {
+                                // Normal Waypoint Speech
+                                speak("Arrived at " + cleanName + tulipNote);
+                            }
+
+                            // Capture coordinates and index to pin image to panel for 30m before updating visual asset
+                            clearedWpIndex = activeWpIndex;
+                            clearedWpLat = target.lat;
+                            clearedWpLon = target.lon;
+
+                            activeWpIndex++;
+                            // FIX: Reset partial countdown along the path coordinates for the next upcoming waypoint
+                            if (navWaypoints[activeWpIndex]) {
+                                let currentPathIdx = findClosestPathIndex(latitude, longitude);
+                                let nextWpPathIdx = findClosestPathIndex(navWaypoints[activeWpIndex].lat, navWaypoints[activeWpIndex].lon);
+                                partialDist = calculateDistanceAlongPath(currentPathIdx, nextWpPathIdx);
+                            }
+
+                            wpMarkersHit.p2km = false;
+                            wpMarkersHit.p1km = false;
+                            wpMarkersHit.p500 = false;
+                            wpMarkersHit.p150 = false;
+                            wpMarkersHit.p50 = false;
+                            
+                            updateTargetDisplay();
+                            
+                            if (activeWpIndex < navWaypoints.length) {
+                                setTimeout(() => {
+                                    let nextTarget = navWaypoints[activeWpIndex];
+                                    let nextName = formatWpName(nextTarget.name);
+                                    
+                                    // FIX: Sync voice with the true road path distance instead of a direct line
+                                    let nextDist = partialDist; 
+                                    speak("Distance to " + nextName + " is " + nextDist.toFixed(2) + " kilometers");
+                                    
+                                    let nextDistM = nextDist * 1000;
+                                    if (nextDistM <= 530 && nextDistM >= 450) {
+                                        wpMarkersHit.p500 = true; 
+                                    }
+                                    if (nextDistM <= 230 && nextDistM >= 190) {
+                                        wpMarkersHit.p150 = true;
+                                    }
+                                }, 2500);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isWaitingForAccuracy || !watchId || accuracy > 40) return;
+        
+        if (curSpeed < 1.0) {
+            resumeStrikeStartTime = null;
+            if (!isAutoPaused && !stopTimeStart) stopTimeStart = Date.now();
+            if (!isAutoPaused && stopTimeStart && (Date.now() - stopTimeStart > 60000)) {
+                isAutoPaused = true; speak("Paused");
+                if (navStarted && sessionStartTime) accumulatedTime += (Date.now() - sessionStartTime);
+                clearInterval(timerInterval); releaseWakeLock();
+                saveStateToVault();
+            }
+        } else if (curSpeed >= 2.0) {
+            stopTimeStart = null;
+            if (isAutoPaused) {
+                if (!resumeStrikeStartTime) resumeStrikeStartTime = Date.now();
+                if (Date.now() - resumeStrikeStartTime >= 3000) {
+                    isAutoPaused = false; speak("Resumed");
+                    if (navStarted) {
+                        sessionStartTime = Date.now(); 
+                        startTimer(); 
+                    }
+                    requestWakeLock();
+                    saveStateToVault();
+                }
+            }
+        }
+
+       if (isAutoPaused || !lastCoords) return;
+        const d = calculateHaverDist(lastCoords.lat, lastCoords.lon, latitude, longitude);
+        if (d > 0.002) {
+            // FIX: If a route is loaded, do not let REC mode increment distances and corrupt NAV variables
+            if (currentMode === 'REC') {
+                if (navWaypoints.length === 0) {
+                    totalDist += d;
+                    partialDist += d;
+                }
+            } else if (currentMode === 'NAV' && navStarted) {
+                totalDist += d; 
+                
+                // --- REGULARITY 1-KILOMETER TRIGGER LOGIC ---
+                if (window.targetAvgSpeed > 0 && !window.isPostFlying) {
+                    if (typeof window.regularityDistanceCounter === 'undefined') window.regularityDistanceCounter = 0;
+                    window.regularityDistanceCounter += d; // Add distance to the hidden counter
+                    
+                    if (window.regularityDistanceCounter >= 1.0) { // When it hits 1 kilometer
+                        const elapsedMs = accumulatedTime + (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+                        if (elapsedMs > 0) {
+                            let currentAvgSpeed = totalDist / (elapsedMs / 3600000); // Overall stage average
+                            let diff = currentAvgSpeed - window.targetAvgSpeed;
+                            let absDiff = Math.round(Math.abs(diff));
+                            
+                            if (absDiff <= 1) { // 1 km/h tolerance buffer
+                                speak("Average speed on target. Hold this pace.");
+                            } else if (diff > 1) {
+                                speak("Average speed high by " + absDiff + " kilometers per hour. Slow down.");
+                            } else if (diff < -1) {
+                                speak("Average speed low by " + absDiff + " kilometers per hour. Pick up the pace.");
+                            }
+                        }
+                        window.regularityDistanceCounter = 0; // Reset for the next kilometer
+                    }
+                }
+                // --------------------------------------------
+            }
+            
+            // FIX: Keep counting partial distance upwards to the STOP point
+            if (currentMode === 'NAV' && window.isPostFlying) {
+                partialDist += d;
+                document.getElementById('partial').innerText = partialDist.toFixed(2);
+                document.getElementById('total').innerText = "0.00"; 
+            }
+            
+            if (currentMode === 'REC') {
+                if (navWaypoints.length > 0) {
+                    document.getElementById('total').innerText = "0.00";
+                    document.getElementById('partial').innerText = "0.00";
+                } else {
+                    document.getElementById('total').innerText = totalDist.toFixed(2);
+                    document.getElementById('partial').innerText = partialDist.toFixed(2);
+                }
+            }
+            if (navStarted || currentMode === 'REC') {
+                const elapsed = accumulatedTime + (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+                if (elapsed > 0) {
+                    document.getElementById('speed').innerText = (totalDist / (elapsed / 3600000)).toFixed(1);
+                }
+            }
+            trackPoints.push({ lat: latitude, lon: longitude, ele: altitude || 0 });
+            lastCoords = { lat: latitude, lon: longitude, ele: altitude || 0, time: Date.now() };
+            saveStateToVault();
+        }
+    }
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const ms = accumulatedTime + (sessionStartTime ? (Date.now() - sessionStartTime) : 0);
+            const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000), s = Math.floor((ms%60000)/1000);
+            document.getElementById('timer').innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }, 1000);
+    }
+
+    rBtn = document.getElementById('recToggleBtn');
+    rBtn.addEventListener('touchstart', (e) => {
+        requestWakeLock();
+        const isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        
+        if (rBtn.classList.contains('start-btn')) {
+            isWaitingForAccuracy = true; 
+            accuracyAchieved = false;
+            isManualPaused = false;
+            
+            watchId = navigator.geolocation.watchPosition(updateStats, null, { enableHighAccuracy: true });
+            rBtn.textContent = isGreek ? "Παύση καταγραφής" : "Pause rec"; rBtn.className = "stop-btn"; rBtn.style.background = "#ea4335";
+            speak("Waiting for GPS accuracy");
+            saveStateToVault();
+        } else {
+            e.preventDefault();
+            let p = 0;
+            let wasLongPressTriggered = false;
+            
+            let itv = setInterval(() => {
+                p += 2; rBtn.style.background = `linear-gradient(to bottom, white ${p}%, #ea4335 ${p}%)`;
+                if (p >= 100) { 
+                    clearInterval(itv); 
+                    wasLongPressTriggered = true;
+                    handleOpenSummaryModal(true);
+                }
+            }, 60);
+
+            rBtn.addEventListener('touchend', () => { 
+                clearInterval(itv); 
+                if (!wasLongPressTriggered) {
+                    rBtn.style.background = "#34a853";
+                    rBtn.textContent = isGreek ? "Συνέχιση καταγραφής" : "Resume rec"; rBtn.className = "start-btn";
+                    speak("RECORDING PAUSED");
+                    isManualPaused = true;
+                    
+                    if (sessionStartTime) {
+                        accumulatedTime += (Date.now() - sessionStartTime);
+                        sessionStartTime = null;
+                    }
+                    clearInterval(timerInterval);
+                    if (watchId) navigator.geolocation.clearWatch(watchId);
+                    watchId = null;
+                    accuracyAchieved = false;
+                    lastCoords = null; 
+                    releaseWakeLock();
+                    saveStateToVault();
+                }
+            }, {once:true});
+        }
+    });
+
+    nBtn = document.getElementById('navToggleBtn');
+    nBtn.addEventListener('touchstart', (e) => {
+        requestWakeLock();
+        const isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+        
+        if (nBtn.classList.contains('start-btn')) {
+            isWaitingForAccuracy = true; 
+            accuracyAchieved = false;
+            isManualPaused = false;
+            
+            // GATEKEEPER CHECK: Ensure route is pre-loaded before starting
+            if (!window.appIsReady) {
+                speak("Route not loaded. Wait for READY status.");
+                return;
+            }
+            watchId = navigator.geolocation.watchPosition(updateStats, null, { enableHighAccuracy: true });
+            nBtn.textContent = isGreek ? "Παύση πλοήγησης" : "Pause nav"; nBtn.className = "stop-btn"; nBtn.style.background = "#ea4335";
+            speak("Waiting for GPS accuracy");
+            saveStateToVault();
+        } else {
+            e.preventDefault();
+            let p = 0;
+            let itv = setInterval(() => {
+                p += 2; nBtn.style.background = `linear-gradient(to bottom, white ${p}%, #ea4335 ${p}%)`;
+                if (p >= 100) { 
+                    clearInterval(itv); 
+                    handlePause(); 
+                    nBtn.style.background = "#34a853"; 
+                }
+            }, 60);
+            nBtn.addEventListener('touchend', () => { 
+                clearInterval(itv); 
+                nBtn.style.background = "#ea4335"; 
+                if(p<100) handlePause(); 
+            }, {once:true});
+        }
+    });
+
+    function handlePause() {
+        speak("PAUSING NAVIGATION");
+        isManualPaused = true;
+        nBtn.innerText = "RESUME NAV"; nBtn.className = "start-btn"; nBtn.style.background = "#34a853";
+        if (sessionStartTime) {
+            accumulatedTime += (Date.now() - sessionStartTime);
+            sessionStartTime = null;
+        }
+        clearInterval(timerInterval);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        accuracyAchieved = false;
+        stopWrongWayAudioLoop();
+        document.body.classList.remove('panic-mode');
+        document.getElementById('tulipLiveBox').style.display = 'none';
+        releaseWakeLock();
+        saveStateToVault();
+    }
+
+    function handleOpenSummaryModal(showModal) {
+        speak("STOPPING AND PREVIEWING STAGE");
+        if (sessionStartTime) {
+            accumulatedTime += (Date.now() - sessionStartTime);
+            sessionStartTime = null;
+        }
+        clearInterval(timerInterval); 
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        watchId = null; isAutoPaused = false; accuracyAchieved = false;
+        
+        rBtn.innerText = "RESUME REC"; rBtn.className = "start-btn"; rBtn.style.background = "#34a853";
+        
+        if (showModal && currentMode === 'REC') {
+            const count = waypoints.filter(w => w.type === 's' || w.type === 'rp' || w.type === 'nos').length;
+            document.getElementById('modalData').innerHTML = `• KM: ${totalDist.toFixed(2)}<br>• RALLY WAYPOINTS: ${count}<br>• AVG: ${document.getElementById('speed').innerText} KM/H`;
+            document.getElementById('reportModal').style.display = 'flex';
+            setTimeout(() => { document.getElementById('stageName').focus(); }, 200);
+        }
+        saveStateToVault();
+    }
+
+    function closeModalAndResumeRecording() {
+        document.getElementById('reportModal').style.display = 'none'; 
+        rBtn.innerText = "RESUME REC"; rBtn.className = "start-btn"; rBtn.style.background = "#34a853";
+        speak("Stage summary closed. Ready to resume recording.");
+        saveStateToVault();
+    }
+
+    function handleResetAndStop(showModal) {
+        if (sessionStartTime) accumulatedTime += (Date.now() - sessionStartTime);
+        clearInterval(timerInterval); 
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        watchId = null; isAutoPaused = false; navStarted = false; accuracyAchieved = false; isManualPaused = false;
+        isOffTrack = false; offTrackAnchor = null;
+        stopWrongWayAudioLoop();
+        upstreamAnchor = null;
+        zeroSpeedAnchor = null;
+        wasSpeedZeroTriggered = false;
+        isAustereLoopRunning = false;
+        clearedWpIndex = null;
+        clearedWpLat = null;
+        clearedWpLon = null;
+        window.isPostFlying = false;
+        
+        rBtn.innerText = "START RECORDING"; rBtn.className = "start-btn"; rBtn.style.background = "#34a853";
+        nBtn.innerText = "START NAVIGATION"; nBtn.className = "start-btn"; nBtn.style.background = "#34a853";
+        
+        document.body.classList.remove('panic-mode');
+        document.getElementById('partialLabel').innerText = (currentMode === 'NAV') ? "Distance to WP" : "Partial KM";
+        document.getElementById('tulipLiveBox').style.display = 'none';
+        releaseWakeLock();
+        clearVault();
+        if (showModal && currentMode === 'REC') {
+            const count = waypoints.filter(w => w.type === 's' || w.type === 'rp' || w.type === 'nos').length;
+            document.getElementById('modalData').innerHTML = `• KM: ${totalDist.toFixed(2)}<br>• RALLY WAYPOINTS: ${count}<br>• AVG: ${document.getElementById('speed').innerText} KM/H`;
+            document.getElementById('reportModal').style.display = 'flex';
+            setTimeout(() => { document.getElementById('stageName').focus(); }, 200);
+        }
+    }
+
+    function saveFileName() {
+        const input = document.getElementById('stageName');
+        const saveBtn = document.getElementById('saveNameBtn');
+        input.classList.add('locked');
+        saveBtn.style.background = "#34a853"; saveBtn.innerText = "OK";
+        document.getElementById('exportBtn').style.opacity = "1";
+        document.getElementById('exportBtn').style.pointerEvents = "auto";
+        speak("Stage name saved");
+    }
+
+    function closeModal() { 
+        document.getElementById('reportModal').style.display = 'none'; 
+        handleResetAndStop(false);
+    }
+
+    const pBtn = document.getElementById('resetPartialBtn');
+    pBtn.onclick = () => { partialDist = 0; document.getElementById('partial').innerText = "0.00"; speak("Partial Reset"); saveStateToVault(); };
+
+    function setupWaypointBtn(id, ringId, color, type) {
+        const btn = document.getElementById(id);
+        const ring = document.getElementById(ringId);
+        let timer;
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            let deg = 0;
+            timer = setInterval(() => {
+                deg += 7.2;
+                ring.style.background = `conic-gradient(${color} ${deg}deg, #444 ${deg}deg)`;
+                if (deg >= 360) {
+                    clearInterval(timer);
+                    ring.style.background = `conic-gradient(transparent 0deg, #444 0deg)`;
+                    mark(type);
+                    partialDist = 0; document.getElementById('partial').innerText = "0.00"; 
+                }
+            }, 40); 
+        });
+        btn.addEventListener('touchend', () => { clearInterval(timer); ring.style.background = `conic-gradient(transparent 0deg, #444 0deg)`; });
+    }
+
+    setupWaypointBtn('btn-rp', 'ring-rp', '#fbbc05', 'double');
+    setupWaypointBtn('btn-nos', 'ring-nos', '#1a73e8', 'long');
+    setupWaypointBtn('btn-marshal', 'ring-marshal', '#e67e22', 'marshal');
+
+    function mark(type) {
+        if (!lastCoords) return;
+        let n = "", s = "", iconKey = "";
+        const dist = totalDist.toFixed(2);
+        if (type === 'start') { n = "START FLAG"; iconKey = "start"; }
+        else if (type === 'long') { n = "NO S"; s = `No Safety Marshal saved at ${dist} kilometers`; iconKey = "nos"; }
+        else if (type === 'double') { n = `RP${globalWpCounter++}`; s = `Radio Point ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "rp"; }
+        else if (type === 'marshal') { n = `S${globalWpCounter++}`; s = `S ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "s"; }
+        waypoints.push({ lat: lastCoords.lat, lon: lastCoords.lon, ele: lastCoords.ele, name: `${n} | ${dist}KM`, type: iconKey });
+        saveStateToVault();
+        if(s) speak(s);
+    }
+
+    const totalArea = document.getElementById('totalArea');
+    totalArea.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        let p = 0;
+        let itv = setInterval(() => {
+            p += 2; totalArea.style.background = `linear-gradient(to bottom, white ${p}%, #3d3d3d ${p}%)`;
+            if (p >= 100) {
+                clearInterval(itv); totalArea.style.background = "#3d3d3d";
+                totalDist = 0; partialDist = 0; accumulatedTime = 0;
+                trackPoints = []; waypoints = []; globalWpCounter = 1;
+                isOffTrack = false; offTrackAnchor = null;
+                stopWrongWayAudioLoop();
+                upstreamAnchor = null;
+        	zeroSpeedAnchor = null;
+        	wasSpeedZeroTriggered = false;
+        	isAustereLoopRunning = false;
+        	clearedWpIndex = null;
+        	clearedWpLat = null;
+        	clearedWpLon = null;
+        	window.isPostFlying = false;
+                document.body.classList.remove('panic-mode');
+                document.getElementById('total').innerText = "0.00";
+                document.getElementById('partial').innerText = "0.00";
+                document.getElementById('timer').innerText = "00:00:00";
+                document.getElementById('partialLabel').innerText = (currentMode === 'NAV') ? "Distance to WP" : "Partial KM";
+                document.getElementById('tulipLiveBox').style.display = 'none';
+                clearVault(); 
+                speak("TOTAL KILOMETERS AND TIMER RESET");
+            }
+        }, 60);
+        totalArea.addEventListener('touchend', () => { clearInterval(itv); totalArea.style.background = "#3d3d3d"; }, {once:true});
+    });
+
+    function exportKML() {
+        const fileName = document.getElementById('stageName').value || "StageMaster_SS";
+        let kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${fileName}</name>`;
+        Object.keys(ICONS).forEach(key => {
+            kml += `<Style id="${key}Icon"><IconStyle><Icon><href>${ICONS[key]}</href></Icon><scale>2.5</scale></IconStyle></Style>`;
+        });
+        waypoints.forEach(wp => {
+            let style = wp.type ? `<styleUrl>#${wp.type}Icon</styleUrl>` : '';
+            kml += `<Placemark><name>${wp.name}</name>${style}<Point><coordinates>${wp.lon},${wp.lat},${wp.ele}</coordinates></Point></Placemark>`;
+        });
+        if (trackPoints.length > 0) {
+            const last = trackPoints[trackPoints.length - 1];
+            kml += `<Placemark><name>FLYING FINISH | ${totalDist.toFixed(2)}KM</name><styleUrl>#finishIcon</styleUrl><Point><coordinates>${last.lon},${last.lat},${last.ele}</coordinates></Point></Placemark>`;
+        }
+        kml += `<Placemark><name>Path</name><Style><LineStyle><color>ff0000ff</color><width>5</width></LineStyle></Style><LineString><altitudeMode>relativeToGround</altitudeMode><coordinates>`;
+        trackPoints.forEach(pt => { kml += `${pt.lon},${pt.lat},${pt.ele} `; });
+        kml += `</coordinates></LineString></Placemark></Document></kml>`;
+        
+        totalDist = 0; partialDist = 0; accumulatedTime = 0;
+        trackPoints = []; waypoints = []; globalWpCounter = 1;
+        clearedWpIndex = null; clearedWpLat = null; clearedWpLon = null;
+        document.getElementById('total').innerText = "0.00";
+        document.getElementById('partial').innerText = "0.00";
+        document.getElementById('timer').innerText = "00:00:00";
+        rBtn.innerText = "START RECORDING"; rBtn.className = "start-btn"; rBtn.style.background = "#34a853";
+        document.getElementById('reportModal').style.display = 'none';
+        document.getElementById('tulipLiveBox').style.display = 'none';
+        clearVault();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'})); a.download = `${fileName}.kml`; a.click();
+    }
+
+    // --- MEMORY WIPE LOGIC ---
+    const wipeBtn = document.getElementById('wipeBtn');
+    let wipeProgress = 0;
+    let wipeInterval;
+
+    function startWipeTimer(e) {
+        e.preventDefault();
+        wipeProgress = 0;
+        
+        // 60ms * 50 intervals = 3000ms (3 seconds)
+        wipeInterval = setInterval(() => {
+            wipeProgress += 2;
+            wipeBtn.style.background = `linear-gradient(to right, #ea4335 ${wipeProgress}%, #8b0000 ${wipeProgress}%)`;
+            
+            if (wipeProgress >= 100) {
+                clearInterval(wipeInterval);
+                executeFullWipe();
+            }
+        }, 60); 
+    }
+
+    function cancelWipeTimer(e) {
+        e.preventDefault();
+        clearInterval(wipeInterval);
+        wipeBtn.style.background = "#8b0000";
+        wipeProgress = 0;
+    }
+
+    function executeFullWipe() {
+        // Instead of wiping instantly, open the confirmation popup
+        document.getElementById('wipeConfirmModal').style.display = 'flex';
+    }
+
+    function confirmWipeNo() {
+        // If NO: close the popup and reset the button color
+        document.getElementById('wipeConfirmModal').style.display = 'none';
+        wipeBtn.style.background = "#8b0000";
+        wipeProgress = 0;
+    }
+
+    function confirmWipeYes() {
+        // If YES: hide popup, speak, wait 2.5 seconds, then wipe!
+        document.getElementById('wipeConfirmModal').style.display = 'none';
+        speak("Memory vault cleared from route.");
+        
+        // --- NEW LOCKDOWN LOGIC ---
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        clearInterval(timerInterval);
+        saveStateToVault = function() {}; // Neutralizes the save function so it cannot recreate the vault
+        // --------------------------
+
+        window.offlineImageCache = {}; // Flush the Blob images from active RAM
+        localStorage.removeItem('stagemaster_vault'); // Destroy the persistent save state
+        
+        // Wait 4500 milliseconds (4.5s) to allow the voice to finish speaking before refreshing
+        setTimeout(() => {
+            location.reload(); 
+        }, 4500); 
+    }
+
+    wipeBtn.addEventListener('touchstart', startWipeTimer);
+    wipeBtn.addEventListener('touchend', cancelWipeTimer);
+    wipeBtn.addEventListener('touchcancel', cancelWipeTimer);
+    
+    // --- WIPE BUTTON VISIBILITY OVERRIDES ---
+    // Inject visibility into startImport success
+    const originalStartImport = startImport;
+    startImport = async function(event) {
+        await originalStartImport(event);
+        document.getElementById('wipeBtn').style.display = 'block';
+    };
+
+    // Inject visibility into state recovery
+    const originalCheckStateRecovery = checkStateRecovery;
+    checkStateRecovery = function() {
+        originalCheckStateRecovery();
+        if (navWaypoints && navWaypoints.length > 0) {
+            document.getElementById('wipeBtn').style.display = 'block';
+        }
+    };
+
+// --- HARD RESTART LOGIC ---
+    const restartBtn = document.getElementById('hardRestartBtn');
+    let restartProgress = 0;
+    let restartInterval;
+
+    function startRestartTimer(e) {
+        e.preventDefault();
+        restartProgress = 0;
+        restartInterval = setInterval(() => {
+            restartProgress += 2;
+            restartBtn.style.background = `linear-gradient(to right, #ea4335 ${restartProgress}%, transparent ${restartProgress}%)`;
+            restartBtn.style.color = restartProgress > 50 ? "white" : "#ea4335";
+            
+            if (restartProgress >= 100) {
+                clearInterval(restartInterval);
+                restartBtn.style.background = "transparent";
+                restartBtn.style.color = "#ea4335";
+                if (confirm("Restart StageMaster and return to the login screen?")) {
+                    location.reload();
+                }
+            }
+        }, 60); 
+    }
+
+    function cancelRestartTimer(e) {
+        e.preventDefault();
+        clearInterval(restartInterval);
+        restartBtn.style.background = "transparent";
+        restartBtn.style.color = "#ea4335";
+        restartProgress = 0;
+    }
+
+    restartBtn.addEventListener('touchstart', startRestartTimer);
+    restartBtn.addEventListener('touchend', cancelRestartTimer);
+    restartBtn.addEventListener('touchcancel', cancelRestartTimer);
+
+// --- WAYPOINT COUNTERS LOGIC ---
+    function updateWpCounters() {
+        let rp = 0, nos = 0, marshal = 0;
+        let activeWps = [];
+
+        // LIVE COUNTDOWN LOGIC:
+        if (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+            // Route Loaded: Slice the list to ONLY look at waypoints we haven't reached yet
+            activeWps = navWaypoints.slice(activeWpIndex); 
+        } else {
+            // Manual Recording: Count normally
+            activeWps = waypoints;
+        }
+        
+        activeWps.forEach(wp => {
+            let type = (wp.type || "").toUpperCase().trim();
+            
+            if (type === 'RP') rp++;
+            else if (type === 'NOS' || type === 'NO S') nos++;
+            else if (type === 'MARSHAL' || type === 'S') marshal++; 
+        });
+        
+        document.getElementById('count-rp').innerText = rp;
+        document.getElementById('count-nos').innerText = nos;
+        document.getElementById('count-marshal').innerText = marshal;
+    }
+
+    // Connect the counters to button clicks
+    const originalMark = mark;
+    mark = function(type) {
+        originalMark(type);
+        updateWpCounters();
+    };
+
+    // Connect the counters to app load/vault recovery
+    const originalCheckStateRecoveryCounters = checkStateRecovery;
+    checkStateRecovery = function() {
+        originalCheckStateRecoveryCounters();
+        updateWpCounters();
+    };
+
+    // --- FORCE REFRESH ON MODE SWITCH ---
+    const originalSwitchMode = switchMode;
+    switchMode = function(mode) {
+        originalSwitchMode(mode);
+        updateWpCounters();
+    };// Logic to handle the button click
+
+    // Zero out the counters when the vault is cleared (Export or Long-Press Reset)
+    const originalClearVault = clearVault;
+    clearVault = function() {
+        originalClearVault();
+        updateWpCounters();
+    };
+
+    // --- LIVE COUNTDOWN TRIGGER HOOK ---
+    // Every time the target changes, refresh the numbers to tick them down
+    const originalUpdateTargetDisplayCounters = updateTargetDisplay;
+    updateTargetDisplay = function() {
+        originalUpdateTargetDisplayCounters();
+        if (typeof updateWpCounters === 'function') {
+            updateWpCounters();
+        }
+    };
+
+    // ==========================================
+    // --- MAP REVIEW ENGINE ---
+    // ==========================================
+    let mapReviewInstance = null;
+    let mapReviewCarMarker = null;
+    let mapReviewTrackUpMode = false;
+    let mapReviewLocateInterval = null;
+
+    function openMapReviewFromLaunch() {
+        requestWakeLock();
+        document.getElementById('languageOverlay').style.display = 'none';
+        document.getElementById('mapReviewModal').style.display = 'flex';
+
+        if (!mapReviewInstance) {
+            mapReviewInstance = L.map('fullScreenMap', { 
+                zoomControl: true,
+                dragging: true,
+                touchZoom: true,
+                scrollWheelZoom: true,
+                doubleClickZoom: true
+            }).setView([38.052, 23.828], 15);
+            
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+                maxZoom: 19, 
+                attribution: '' 
+            }).addTo(mapReviewInstance);
+
+            let myUpperId = (myCarId || "").toUpperCase();
+            let myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
+            if (myUpperId.includes("MIV")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
+            else if (myUpperId.includes("AMB")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
+            else if (myUpperId.includes("PLAT")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
+            else if (myUpperId.includes("FIRE")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
+            else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
+            else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+
+            let carIcon = L.divIcon({
+                html: `<div id="mapReviewCarImg" style="transform: rotate(0deg); transition: transform 0.1s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                           <div id="mapReviewCarLabel" style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${myCarId} <span style="color: #fbbc05; font-size: 12px;">0km/h</span></div>
+                           <img src="${myCarImgUrl}" style="width:60px;height:60px; display: block !important; margin: auto; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8)); position: relative; z-index: 1;">
+                       </div>`,
+                className: 'custom-car-div',
+                iconSize: [90, 80],
+                iconAnchor: [45, 45]
+            });
+            mapReviewCarMarker = L.marker([38.052, 23.828], { icon: carIcon, zIndexOffset: 1000 }).addTo(mapReviewInstance);
+
+            if (!window.mapReviewLiveMarkers) window.mapReviewLiveMarkers = {};
+
+            database.ref('live_stage').on('value', (snapshot) => {
+                const allCars = snapshot.val();
+                if (!allCars || !mapReviewInstance) return;
+
+                const now = Date.now();
+
+                for (const carId in allCars) {
+                    if (carId === myCarId) {
+                        const myData = allCars[carId];
+                        if (mapReviewCarMarker) {
+                            mapReviewCarMarker.setLatLng([myData.lat, myData.lon]);
+                            
+                            let mySpeed = Math.round(myData.speed || 0);
+                            let labelDiv = document.getElementById('mapReviewCarLabel');
+                            if (labelDiv) {
+                                labelDiv.innerHTML = `${myCarId} <span style="color: #fbbc05; font-size: 12px;">${mySpeed}km/h</span>`;
+                            }
+
+                            // Ensures your local car updates its heading on the map even in North-Up mode
+                            if (!mapReviewTrackUpMode) {
+                                let localCarWrapper = document.getElementById('mapReviewCarImg');
+                                if (localCarWrapper) localCarWrapper.style.transform = `rotate(${myData.heading || 0}deg)`;
+                            }
+                        }
+                        continue;
+                    }
+
+                    const compData = allCars[carId];
+                    if (now - compData.timestamp > 120000) {
+                        if (window.mapReviewLiveMarkers && window.mapReviewLiveMarkers[carId]) {
+                            mapReviewInstance.removeLayer(window.mapReviewLiveMarkers[carId]);
+                            delete window.mapReviewLiveMarkers[carId];
+                        }
+                        continue;
+                    }
+
+                    if (!window.cachedSpeeds) window.cachedSpeeds = {};
+                    let currentSpeed = Math.round(compData.speed || 0);
+                    if (!window.cachedSpeeds[carId] || (now - window.cachedSpeeds[carId].lastUpdate > 15000)) {
+                        window.cachedSpeeds[carId] = { speed: currentSpeed, lastUpdate: now };
+                    }
+                    let displaySpeed = window.cachedSpeeds[carId].speed;
+                    
+                    let compUpperId = carId.toUpperCase();
+                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+
+                    let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
+                    let heading = compData.heading || 0;
+
+                    let dynamicReviewIcon = L.divIcon({
+                        html: `<div style="transform: rotate(${heading}deg); transition: transform 0.2s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                   <div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color: #fbbc05; font-size: 12px;">${displaySpeed}km/h</span></div>
+                                   <img src="${compCarImgUrl}" style="width:50px;height:50px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1;">
+                               </div>`,
+                        className: 'custom-car-div',
+                        iconSize: [80, 70],
+                        iconAnchor: [40, 35]
+                    });
+
+                    if (!window.mapReviewLiveMarkers[carId]) {
+                    window.mapReviewLiveMarkers[carId] = L.marker([compData.lat, compData.lon], { icon: dynamicReviewIcon, zIndexOffset: 999 }).addTo(mapReviewInstance);
+                } else {
+                    window.mapReviewLiveMarkers[carId].setLatLng([compData.lat, compData.lon]);
+                    window.mapReviewLiveMarkers[carId].setIcon(dynamicReviewIcon);
+                }
+                window.mapReviewLiveMarkers[carId].lastActive = compData.timestamp;
+            }
+        });
+
+        // --- NEW: Draw Pre-loaded KML on Map Review ---
+        if (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) {
+            let latlngs = navPathCoords.map(pt => [pt.lat, pt.lon]);
+            
+            // Clear old line if it exists
+            if (window.mapReviewRouteLine) {
+                mapReviewInstance.removeLayer(window.mapReviewRouteLine);
+            }
+            window.mapReviewRouteLine = L.polyline(latlngs, { color: '#ea4335', weight: 6, opacity: 0.8 }).addTo(mapReviewInstance);
+            
+            // Fit bounds so you can see ALL the path zooming in and out initially
+            mapReviewInstance.fitBounds(window.mapReviewRouteLine.getBounds());
+            
+            if (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+                if (window.mapReviewWpMarkers && window.mapReviewWpMarkers.length > 0) {
+                    window.mapReviewWpMarkers.forEach(m => mapReviewInstance.removeLayer(m));
+                }
+                window.mapReviewWpMarkers = [];
+
+                navWaypoints.forEach((wp) => {
+                    let iconUrl = null;
+                    let searchStr = (wp.name + " " + (wp.desc || "")).toUpperCase();
+                    
+                    if (searchStr.includes("START")) iconUrl = ICONS.start;
+                    else if (searchStr.includes("FLYING") || searchStr.includes("FINISH")) iconUrl = ICONS.finish;
+                    else if (wp.type === "RP") iconUrl = ICONS.rp;
+                    else if (wp.type === "NOS") iconUrl = ICONS.nos;
+                    else if (wp.type === "MARSHAL") iconUrl = ICONS.s;
+
+                    if (iconUrl) {
+                        let isMiglia = (wp.type === "NOS");
+                        let customIcon = L.icon({
+                            iconUrl: iconUrl,
+                            iconSize: isMiglia ? [55, 55] : [35, 35],
+                            iconAnchor: isMiglia ? [27, 27] : [17, 17]
+                        });
+                        let marker = L.marker([wp.lat, wp.lon], { icon: customIcon, zIndexOffset: 500 }).addTo(mapReviewInstance);
+                        window.mapReviewWpMarkers.push(marker);
+                    }
+                });
+            }
+        }
+        // ----------------------------------------------
+        
+        mapReviewInstance.on('dragstart', function() {
+                if (mapReviewTrackUpMode) {
+                    toggleMapReviewTracking(); 
+                }
+            });
+        }
+        
+        if (bgLastCoords) {
+            mapReviewInstance.setView([bgLastCoords.lat, bgLastCoords.lon], 16);
+        }
+        setTimeout(() => { mapReviewInstance.invalidateSize(); }, 100);
+    }
+
+    function closeMapReview() {
+        document.getElementById('mapReviewModal').style.display = 'none';
+        document.getElementById('languageOverlay').style.display = 'flex';
+        releaseWakeLock();
+        if (mapReviewTrackUpMode) {
+            toggleMapReviewTracking(); 
+        }
+    }
+
+    function toggleMapReviewTracking() {
+        const btn = document.getElementById('locateMeBtn');
+        const mapDiv = document.getElementById('fullScreenMap');
+        
+        mapReviewTrackUpMode = !mapReviewTrackUpMode;
+
+        if (mapReviewTrackUpMode) {
+            btn.style.background = "#fbbc05";
+            btn.style.color = "black";
+            btn.innerText = "TRACK UP: ON";
+            
+            mapReviewInstance.dragging.disable();
+            if (bgLastCoords) mapReviewInstance.setView([bgLastCoords.lat, bgLastCoords.lon], 18);
+
+            mapReviewLocateInterval = setInterval(() => {
+                if (bgLastCoords && mapReviewInstance) {
+                    mapReviewInstance.setView([bgLastCoords.lat, bgLastCoords.lon], 18);
+                    
+                    let activeHeading = globalCompassHeading;
+                    mapDiv.style.transform = `rotate(${-activeHeading}deg)`;
+                    mapDiv.style.transition = 'transform 0.2s linear';
+                    
+                    let mapReviewCarImg = document.getElementById('mapReviewCarImg');
+                    if (mapReviewCarImg) {
+                        mapReviewCarImg.style.transform = `rotate(${activeHeading}deg)`;
+                    }
+                }
+            }, 1000);
+        } else {
+            btn.style.background = "#1a73e8";
+            btn.style.color = "white";
+            btn.innerText = "LOCATE ME";
+            
+            mapReviewInstance.dragging.enable();
+
+            if (mapReviewLocateInterval) {
+                clearInterval(mapReviewLocateInterval);
+                mapReviewLocateInterval = null;
+            }
+            
+            mapDiv.style.transform = 'rotate(0deg)';
+            let mapReviewCarImg = document.getElementById('mapReviewCarImg');
+            if (mapReviewCarImg) {
+                mapReviewCarImg.style.transform = `rotate(0deg)`;
+            }
+        }
+    }
+
+    // ==========================================
+    // --- STAGE REVIEW ENGINE (HARD-CODED KML) ---
+    // ==========================================
+    
+    let reviewMap = null;
+    let reviewCarMarker = null;
+    let reviewRouteData = []; 
+    let reviewActiveIndex = 0; 
+    let reviewAltChart = null; 
+    let reviewRouteLine = null;
+    let reviewWpMarkers = []; // Memory array for the review waypoints
+
+    function openStageReview() {
+        // Open the modal
+        document.getElementById('stageReviewModal').style.display = 'flex';
+        
+        // 1. Initialize the Review Map if it hasn't been created yet
+        if (!reviewMap) {
+            reviewMap = L.map('review-bottom-pane', { 
+                zoomControl: true,
+                dragging: true,
+                touchZoom: true,
+                scrollWheelZoom: true,
+                doubleClickZoom: true
+            }).setView([38.052, 23.828], 13);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+                maxZoom: 19, 
+                attribution: '' 
+            }).addTo(reviewMap);
+
+            // --- NEW: LIVE MULTIPLAYER CARS ON REVIEW MAP ---
+            if (!window.reviewLiveMarkers) window.reviewLiveMarkers = {};
+
+            database.ref('live_stage').on('value', (snapshot) => {
+                const allCars = snapshot.val();
+                if (!allCars || !reviewMap) return;
+
+                const now = Date.now();
+
+                for (const carId in allCars) {
+                    const compData = allCars[carId];
+                    
+                    // --- THE SOFT FIX: 2-Minute TTL Filter ---
+                    if (now - compData.timestamp > 120000) {
+                        if (window.reviewLiveMarkers && window.reviewLiveMarkers[carId]) {
+                            reviewMap.removeLayer(window.reviewLiveMarkers[carId]);
+                            delete window.reviewLiveMarkers[carId];
+                        }
+                        continue; // Skip drawing this ghost car
+                    }
+
+                    // --- 15-SECOND SPEED CACHE LOGIC ---
+                    if (!window.cachedSpeeds) window.cachedSpeeds = {};
+                    let currentSpeed = Math.round(compData.speed || 0);
+                    
+                    if (!window.cachedSpeeds[carId] || (now - window.cachedSpeeds[carId].lastUpdate > 15000)) {
+                        window.cachedSpeeds[carId] = { speed: currentSpeed, lastUpdate: now };
+                    }
+                    let displaySpeed = window.cachedSpeeds[carId].speed;
+                    
+                    let compUpperId = carId.toUpperCase();
+                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+
+                    let isMe = (carId === myCarId);
+                    // Standardize the shadow filter for all cars
+                    let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
+                    let heading = compData.heading || 0;
+
+                    let dynamicReviewIcon = L.divIcon({
+                        html: `<div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color: #fbbc05; font-size: 12px;">${displaySpeed}km/h</span></div>
+                               <img src="${compCarImgUrl}" style="width:50px;height:50px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1; transform: rotate(${heading}deg); transition: transform 0.2s linear;">`,
+                        className: 'custom-car-div',
+                        iconSize: [80, 70], // Widened to fit the ID and Speed text cleanly
+                        iconAnchor: [40, 35] // Re-centered for the new 80px width
+                    });
+
+                    // Update existing marker or create a new one for each car
+                    if (!window.reviewLiveMarkers[carId]) {
+                        window.reviewLiveMarkers[carId] = L.marker([compData.lat, compData.lon], { icon: dynamicReviewIcon, zIndexOffset: 999 }).addTo(reviewMap);
+                    } else {
+                        window.reviewLiveMarkers[carId].setLatLng([compData.lat, compData.lon]);
+                        window.reviewLiveMarkers[carId].setIcon(dynamicReviewIcon);
+                    }
+                    // Timestamp for the Active Ghost Sweeper
+                    window.reviewLiveMarkers[carId].lastActive = compData.timestamp;
+                }
+            });
+
+            // --- NEW: Active Ghost Sweeper for Review Map (Checks every 10 seconds) ---
+            if (!window.ghostSweeperReview) {
+                window.ghostSweeperReview = setInterval(() => {
+                    const checkTime = Date.now();
+                    if (window.reviewLiveMarkers) {
+                        for (const carId in window.reviewLiveMarkers) {
+                            if (checkTime - window.reviewLiveMarkers[carId].lastActive > 120000) {
+                                reviewMap.removeLayer(window.reviewLiveMarkers[carId]);
+                                delete window.reviewLiveMarkers[carId];
+                            }
+                        }
+                    }
+                }, 10000);
+            }
+            // ------------------------------------------------
+        }
+        
+        // 2. Fix Leaflet's sizing bug when rendering inside a hidden div
+        setTimeout(() => { reviewMap.invalidateSize(); }, 100);
+
+        // 3. Trigger the dynamic load
+        loadReviewKML();
+    }
+
+    function closeStageReview() {
+        document.getElementById('stageReviewModal').style.display = 'none';
+    }
+
+    // --- MATH HELPERS FOR REVIEW ROUTE ---
+    function getReviewDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; 
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    }
+
+    function getReviewBearing(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const toDeg = 180 / Math.PI;
+        const dLon = (lon2 - lon1) * toRad;
+        const y = Math.sin(dLon) * Math.cos(lat2 * toRad);
+        const x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) - Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLon);
+        return ((Math.atan2(y, x) * toDeg) + 360) % 360;
+    }
+
+    function findNearestReviewPoint(lat, lon) {
+        let minD = Infinity;
+        let closestIdx = 0;
+        for (let i = 0; i < reviewRouteData.length; i++) {
+            let d = getReviewDistance(lat, lon, reviewRouteData[i].lat, reviewRouteData[i].lon);
+            if (d < minD) { minD = d; closestIdx = i; }
+        }
+        return closestIdx;
+    }
+
+    // --- BI-DIRECTIONAL UI SYNC ---
+    function updateReviewUI(index, source) {
+        if (index === reviewActiveIndex && source !== 'init') return;
+        reviewActiveIndex = index;
+        const dataPoint = reviewRouteData[index];
+        if (!dataPoint) return;
+
+        // Update HUD
+        document.getElementById('review-hud-dist').innerText = dataPoint.dist + " km";
+        document.getElementById('review-hud-alt').innerText = dataPoint.alt + " m";
+
+        // Update Map Marker
+        if (reviewCarMarker) {
+            reviewCarMarker.setLatLng([dataPoint.lat, dataPoint.lon]);
+            const carElement = reviewCarMarker.getElement();
+            if (carElement) {
+                const img = carElement.querySelector('.car-icon-img');
+                if (img) img.style.transform = `rotate(${dataPoint.bearing}deg)`;
+            }
+        }
+
+        // Force Chart Laser Line Jump
+        if (reviewAltChart) {
+            reviewAltChart.update('none'); 
+        }
+    }
+
+    // --- CHART LASER PLUGIN ---
+    const reviewTrackerPlugin = {
+        id: 'verticalTracker',
+        afterDraw: chart => {
+            if (reviewActiveIndex >= 0 && chart.data.labels && reviewActiveIndex < chart.data.labels.length) {
+                let ctx = chart.ctx;
+                let meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data || !meta.data[reviewActiveIndex]) return;
+                
+                let x = meta.data[reviewActiveIndex].x;
+                let topY = chart.chartArea.top;
+                let bottomY = chart.chartArea.bottom;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, topY);
+                ctx.lineTo(x, bottomY);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ea4335'; 
+                ctx.stroke();
+                
+                let y = meta.data[reviewActiveIndex].y;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ea4335';
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    };
+
+    // --- DYNAMIC PARSE ENGINE ---
+    function loadReviewKML() {
+        if (reviewRouteData.length > 0) return; // Prevent heavy reloading if it's already generated
+        
+        if (!window.uploadedKmlText) {
+            console.error("No KML text found in memory.");
+            return;
+        }
+
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(window.uploadedKmlText, "text/xml");
+                
+                const lineString = xmlDoc.getElementsByTagName("LineString")[0];
+                if(!lineString) return;
+                
+                const coordinatesText = lineString.getElementsByTagName("coordinates")[0].textContent;
+                const points = coordinatesText.trim().split(/\s+/);
+                
+                const latLngs = [];
+                const chartLabels = [];
+                const chartAltitudes = [];
+                
+                let cumulativeDistance = 0;
+                let prevLat = null;
+                let prevLon = null;
+                
+                points.forEach((point, index) => {
+                    const [lon, lat, alt] = point.split(',');
+                    if (lat && lon && alt) {
+                        const currentLat = parseFloat(lat);
+                        const currentLon = parseFloat(lon);
+                        const currentAlt = parseFloat(alt);
+
+                        if (prevLat !== null && prevLon !== null) {
+                            cumulativeDistance += getReviewDistance(prevLat, prevLon, currentLat, currentLon);
+                        }
+
+                        let bearing = 0;
+                        if (index > 0 && prevLat !== null) {
+                            bearing = getReviewBearing(prevLat, prevLon, currentLat, currentLon);
+                        }
+                        
+                        let distStr = cumulativeDistance.toFixed(2);
+                        
+                        reviewRouteData.push({
+                            lat: currentLat,
+                            lon: currentLon,
+                            alt: Math.round(currentAlt),
+                            dist: distStr,
+                            bearing: Math.round(bearing)
+                        });
+
+                        latLngs.push([currentLat, currentLon]);
+                        chartLabels.push(distStr);
+                        chartAltitudes.push(currentAlt);
+
+                        prevLat = currentLat;
+                        prevLon = currentLon;
+                    }
+                });
+
+                if (reviewRouteData.length > 1) reviewRouteData[0].bearing = reviewRouteData[1].bearing;
+
+                // Draw Red Line
+                if (reviewRouteLine) reviewMap.removeLayer(reviewRouteLine);
+                reviewRouteLine = L.polyline(latLngs, { color: '#ea4335', weight: 8, opacity: 0.8 }).addTo(reviewMap);
+                reviewMap.fitBounds(reviewRouteLine.getBounds());
+                
+                // --- ADD WAYPOINTS TO REVIEW MAP ---
+                // 1. Clear any old markers
+                if (reviewWpMarkers && reviewWpMarkers.length > 0) {
+                    reviewWpMarkers.forEach(marker => reviewMap.removeLayer(marker));
+                }
+                reviewWpMarkers = [];
+
+                // 2. Scan KML for points and attach icons
+                const placemarks = xmlDoc.getElementsByTagName("Placemark");
+                for (let i = 0; i < placemarks.length; i++) {
+                    const point = placemarks[i].getElementsByTagName("Point")[0];
+                    if (point) {
+                        const name = placemarks[i].getElementsByTagName("name")[0]?.textContent || "";
+                        const descNode = placemarks[i].getElementsByTagName("description")[0];
+                        const description = descNode ? descNode.textContent.trim() : "";
+                        const coords = point.getElementsByTagName("coordinates")[0].textContent.trim().split(",");
+                        
+                        let iconUrl = null;
+                        let searchStr = (name + " " + description).toUpperCase();
+
+                        // Match waypoint types
+                        if (searchStr.includes("START")) iconUrl = ICONS.start;
+                        else if (searchStr.includes("FLYING") || searchStr.includes("FINISH")) iconUrl = ICONS.finish;
+                        else if (/\bRP\d*\b/.test(searchStr)) iconUrl = ICONS.rp;
+                        else if (/\bNO\s?S\d*\b/.test(searchStr)) iconUrl = ICONS.nos;
+                        else if (/\bMARSHAL\d*\b/.test(searchStr) || /\bS\d*\b/.test(searchStr)) iconUrl = ICONS.s;
+
+                        if (iconUrl) {
+                            let customIcon = L.icon({
+                                iconUrl: iconUrl,
+                                iconSize: [28, 28], // Made slightly smaller than the main map so it doesn't clutter the view
+                                iconAnchor: [14, 14]
+                            });
+                            
+                            let marker = L.marker([parseFloat(coords[1]), parseFloat(coords[0])], { 
+                                icon: customIcon, 
+                                zIndexOffset: 500 
+                            }).addTo(reviewMap);
+                            
+                            reviewWpMarkers.push(marker); // Save to memory array
+                        }
+                    }
+                }
+                // -----------------------------------
+                
+                // --- CAR MARKER INIT ---
+                let carImageUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stahemaster-map-chart/main/4x4.png';
+                let carIcon = L.divIcon({
+                    html: `<img src="${carImageUrl}" class="car-icon-img" style="width: 40px; height: 40px; object-fit: contain; transition: transform 0.1s linear; pointer-events: none; transform: rotate(${reviewRouteData[0].bearing}deg);">`,
+                    className: 'custom-car-div',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+                
+                if (reviewCarMarker) reviewMap.removeLayer(reviewCarMarker);
+                reviewCarMarker = L.marker([reviewRouteData[0].lat, reviewRouteData[0].lon], {
+                    icon: carIcon, 
+                    zIndexOffset: 1000
+                }).addTo(reviewMap);
+
+                // Build Chart
+                if (reviewAltChart) reviewAltChart.destroy();
+                const ctx = document.getElementById('altitudeChart').getContext('2d');
+                reviewAltChart = new Chart(ctx, {
+                    type: 'line',
+                    plugins: [reviewTrackerPlugin],
+                    data: {
+                        labels: chartLabels,
+                        datasets: [{
+                            label: 'Altitude (meters)',
+                            data: chartAltitudes,
+                            borderColor: '#bf953f',
+                            backgroundColor: 'rgba(191, 149, 63, 0.2)',
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { grid: { color: '#444' }, ticks: { color: '#aaa', maxTicksLimit: 10 } },
+                            y: { grid: { color: '#444' }, ticks: { color: '#aaa' } }
+                        },
+                        onHover: (event, elements) => {
+                            if (elements && elements.length) {
+                                updateReviewUI(elements[0].index, 'chart');
+                            }
+                        }
+                    }
+                });
+
+                updateReviewUI(0, 'init');
+                
+        } catch (error) {
+            console.error("Error parsing KML for review:", error);
+        }
+    }
+
+    // ==========================================
+    // --- BACKGROUND FIREBASE GPS BROADCAST ---
+    // ==========================================
+    // Starts the millisecond the app loads, completely independent of the REC/NAV buttons.
+    let bgLastCoords = null;
+    
+    // --- THE HARD FIX: Firebase Disconnect Trigger ---
+    if (myCarId) {
+        database.ref('live_stage/' + myCarId).onDisconnect().remove();
+    }
+
+    if ("geolocation" in navigator) {
+        navigator.geolocation.watchPosition(
+            (pos) => {
+                if (!myCarId) return;
+                
+                const { latitude, longitude, speed, heading } = pos.coords;
+                let curSpeed = speed ? speed * 3.6 : 0;
+                
+                // Calculate heading if missing, or use compass memory
+                let activeHeading = globalCompassHeading;
+                if (curSpeed > 2 && heading !== null && !isNaN(heading)) {
+                    activeHeading = Math.round(heading);
+                } else if (heading === null && bgLastCoords) {
+                    activeHeading = Math.round(calculateBearing(bgLastCoords.lat, bgLastCoords.lon, latitude, longitude));
+                }
+                
+                // Push instantly to Firebase
+                database.ref('live_stage/' + myCarId).set({
+                    lat: latitude,
+                    lon: longitude,
+                    heading: activeHeading,
+                    speed: curSpeed,
+                    timestamp: Date.now()
+                });
+                
+                bgLastCoords = { lat: latitude, lon: longitude };
+            },
+            (err) => { console.warn("Background GPS offline: ", err.message); },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</body>
+</html>
