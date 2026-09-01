@@ -1,0 +1,6 @@
+{
+  "appId": "com.pili.stagemaster",
+  "appName": "StageMaster",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
