@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.21</title>
+    <title>StageMaster 11.22</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.21</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.22</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -596,23 +596,28 @@
     }
 
     function speak(t) { 
-        let translatedText = translateVoice(t);
-        let utterance = new SpeechSynthesisUtterance(translatedText);
-        
-        let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
-        utterance.lang = isGreek ? 'el-GR' : 'en-US';
-        
-        let voices = window.speechSynthesis.getVoices();
-        let targetLang = isGreek ? 'el' : 'en';
-        let selectedVoice = voices.find(v => v.lang.startsWith(targetLang));
-        
-        if (selectedVoice) {
-            utterance.voice = selectedVoice;
+        try {
+            let translatedText = translateVoice(t);
+            let utterance = new SpeechSynthesisUtterance(translatedText);
+            
+            let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
+            // Force OS default language explicitly for Android WebView
+            utterance.lang = isGreek ? 'el-GR' : 'en-US';
+            
+            let voices = window.speechSynthesis.getVoices();
+            if (voices && voices.length > 0) {
+                let targetLang = isGreek ? 'el' : 'en';
+                let selectedVoice = voices.find(v => v.lang.startsWith(targetLang) || v.lang.replace('_', '-').startsWith(targetLang));
+                if (selectedVoice) {
+                    utterance.voice = selectedVoice;
+                }
+            }
+            
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance); 
+        } catch(error) {
+            // Silently catch the APK audio crash so the stage math can continue running!
         }
-        
-        // Flush the queue before pushing the new announcement
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance); 
     }
     
     async function requestWakeLock() { 
