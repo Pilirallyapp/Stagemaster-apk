@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.20</title>
+    <title>StageMaster 11.21</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -199,11 +199,12 @@
     function selectLanguage(langCode) {
         requestWakeLock(); // Secure the screen lock the exact moment they tap the app
         
-        // Unlock the speech engine with a silent utterance on first user interaction
-        let silentUtterance = new SpeechSynthesisUtterance("");
-        silentUtterance.volume = 0;
-        window.speechSynthesis.speak(silentUtterance);
-        window.speechSynthesis.cancel();
+        // Safely unlock the speech engine without crashing Android's WebView queue
+        try {
+            let silentUtterance = new SpeechSynthesisUtterance(" ");
+            silentUtterance.volume = 0;
+            window.speechSynthesis.speak(silentUtterance);
+        } catch(e) {}
         
         // 1. Save the choice into the browser's memory
         localStorage.setItem('stagemaster_language', langCode);
@@ -318,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.20</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.21</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
