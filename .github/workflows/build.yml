@@ -36,6 +36,11 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android
 
+      - name: Inject Android Permissions
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest xmlns:android/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" />' $MANIFEST
+
       - name: Sync Assets to Android
         run: npx cap sync android
 
