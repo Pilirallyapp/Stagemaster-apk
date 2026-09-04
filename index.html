@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.25</title>
+    <title>StageMaster 11.30</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.25</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.30</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2654,7 +2654,7 @@
         totalArea.addEventListener('touchend', () => { clearInterval(itv); totalArea.style.background = "#3d3d3d"; }, {once:true});
     });
 
-    function exportKML() {
+    async function exportKML() {
         const fileName = document.getElementById('stageName').value || "StageMaster_SS";
         let kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${fileName}</name>`;
         Object.keys(ICONS).forEach(key => {
@@ -2682,7 +2682,27 @@
         document.getElementById('reportModal').style.display = 'none';
         document.getElementById('tulipLiveBox').style.display = 'none';
         clearVault();
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'})); a.download = `${fileName}.kml`; a.click();
+
+        try {
+            // Bypass WebView and use native Android Filesystem via Capacitor
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                await window.Capacitor.Plugins.Filesystem.writeFile({
+                    path: `${fileName}.kml`,
+                    data: kml,
+                    directory: 'DOCUMENTS', // Saves to the phone's public Documents folder
+                    encoding: 'utf8'
+                });
+                speak("File saved successfully");
+            } else {
+                // Web Fallback (for testing in a standard laptop browser)
+                const a = document.createElement('a'); 
+                a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'})); 
+                a.download = `${fileName}.kml`; 
+                a.click();
+            }
+        } catch (error) {
+            speak("Error saving file");
+        }
     }
 
     // --- MEMORY WIPE LOGIC ---
