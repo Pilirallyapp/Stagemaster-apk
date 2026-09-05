@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.32</title>
+    <title>StageMaster 11.35</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.32</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.35</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -595,14 +595,26 @@
         return text;
     }
 
-    async function speak(t) { 
+    // --- NATIVE AUDIO QUEUE SYSTEM (FULL APK MODE) ---
+    window.voiceQueue = window.voiceQueue || [];
+    window.isSpeakingNow = window.isSpeakingNow || false;
+
+    async function processVoiceQueue() {
+        if (window.voiceQueue.length === 0) {
+            window.isSpeakingNow = false;
+            return;
+        }
+        
+        window.isSpeakingNow = true;
+        let t = window.voiceQueue.shift(); // Pull the first phrase in line
+
         try {
             let translatedText = translateVoice(t);
             let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
             let targetLangCode = isGreek ? 'el-GR' : 'en-US';
 
-            // Bypass WebView and use native Android TTS via Capacitor
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech) {
+                // The magic 'await': The app literally pauses this specific queue loop until the voice finishes speaking!
                 await window.Capacitor.Plugins.TextToSpeech.speak({
                     text: translatedText,
                     lang: targetLangCode,
@@ -611,26 +623,21 @@
                     volume: 1.0,
                     category: 'ambient'
                 });
-                return;
             }
-
-            // Web Fallback (so it still works in a PC browser)
-            let utterance = new SpeechSynthesisUtterance(translatedText);
-            utterance.lang = targetLangCode;
-            
-            let voices = window.speechSynthesis.getVoices();
-            if (voices && voices.length > 0) {
-                let targetLang = isGreek ? 'el' : 'en';
-                let selectedVoice = voices.find(v => v.lang.startsWith(targetLang) || v.lang.replace('_', '-').startsWith(targetLang));
-                if (selectedVoice) {
-                    utterance.voice = selectedVoice;
-                }
-            }
-            
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance); 
         } catch(error) {
-            // Silently catch the audio crash so the stage math can continue running!
+            // Silently catch so the queue doesn't permanently freeze on a glitch
+        }
+
+        // Automatically move to the next phrase in the line once finished
+        processVoiceQueue();
+    }
+
+    function speak(t) {
+        window.voiceQueue = window.voiceQueue || [];
+        window.voiceQueue.push(t); // Put the new announcement at the back of the line
+        
+        if (!window.isSpeakingNow) {
+            processVoiceQueue(); // Start speaking if the co-driver is currently quiet
         }
     }
     
