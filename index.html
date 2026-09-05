@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.30</title>
+    <title>StageMaster 11.31</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.30</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.31</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2684,17 +2684,28 @@
         clearVault();
 
         try {
-            // Bypass WebView and use native Android Filesystem via Capacitor
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
-                await window.Capacitor.Plugins.Filesystem.writeFile({
+            // Bypass WebView and use Native Android Share Menu (Full APK Mode)
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share) {
+                
+                // 1. Save to the temporary cache so Android allows us to extract it
+                const writeResult = await window.Capacitor.Plugins.Filesystem.writeFile({
                     path: `${fileName}.kml`,
                     data: kml,
-                    directory: 'DOCUMENTS', // Saves to the phone's public Documents folder
+                    directory: 'CACHE', 
                     encoding: 'utf8'
                 });
+
+                // 2. Trigger the native Android Share Menu
+                await window.Capacitor.Plugins.Share.share({
+                    title: `${fileName}.kml`,
+                    text: 'StageMaster exported KML route',
+                    url: writeResult.uri,
+                    dialogTitle: 'Save or Share Route'
+                });
+
                 speak("File saved successfully");
             } else {
-                // Web Fallback (for testing in a standard laptop browser)
+                // Web Fallback (for testing on laptop only)
                 const a = document.createElement('a'); 
                 a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'})); 
                 a.download = `${fileName}.kml`; 
