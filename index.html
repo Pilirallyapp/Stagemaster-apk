@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.35</title>
+    <title>StageMaster 11.36</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.35</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.36</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2623,7 +2623,11 @@
         else if (type === 'long') { n = "NO S"; s = `No Safety Marshal saved at ${dist} kilometers`; iconKey = "nos"; }
         else if (type === 'double') { n = `RP${globalWpCounter++}`; s = `Radio Point ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "rp"; }
         else if (type === 'marshal') { n = `S${globalWpCounter++}`; s = `S ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "s"; }
-        waypoints.push({ lat: lastCoords.lat, lon: lastCoords.lon, ele: lastCoords.ele, name: `${n} | ${dist}KM`, type: iconKey });
+        
+        // Check if it's the NO S button to strip the distance, otherwise keep it for everything else
+        let finalName = (type === 'long') ? n : `${n} | ${dist}KM`;
+        
+        waypoints.push({ lat: lastCoords.lat, lon: lastCoords.lon, ele: lastCoords.ele, name: finalName, type: iconKey });
         saveStateToVault();
         if(s) speak(s);
     }
