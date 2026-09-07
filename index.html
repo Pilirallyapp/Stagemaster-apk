@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.36</title>
+    <title>StageMaster 11.40</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.36</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.40</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2105,10 +2105,10 @@
                     }
                 }
 
-                // 30-Meter Stay-on-Screen Evaluation Framework
+                // 10-Meter Stay-on-Screen Evaluation Framework
                 if (clearedWpIndex !== null && clearedWpLat !== null && clearedWpLon !== null) {
                     let distanceFromClearedM = calculateHaverDist(latitude, longitude, clearedWpLat, clearedWpLon) * 1000;
-                    if (distanceFromClearedM >= 30) {
+                    if (distanceFromClearedM >= 10) {
                         clearedWpIndex = null;
                         clearedWpLat = null;
                         clearedWpLon = null;
@@ -2146,7 +2146,7 @@
 
                         // Audio latency offset for Greek language (20 meters = ~1 second head start at 80 km/h)
                         let isGreek = (localStorage.getItem('stagemaster_language') === 'el');
-                        let offset = isGreek ? 20 : 0; 
+                        let offset = isGreek ? 0 : 0; 
 
                         if (distM <= (2000 + offset) && distM > (1950 + offset) && !wpMarkersHit.p2km) {
                             speak("Approaching " + cleanName + " in 2 kilometers");
