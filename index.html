@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.40</title>
+    <title>StageMaster 11.41</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.40</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.41</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -525,6 +525,12 @@
     let clearedWpLon = null;
     
     let regularityStamps = []; // Memory for waypoint timing
+
+    // --- NATIVE DISTANCE FORMATTER ---
+    // Drops decimals automatically for values 10 and above
+    function formatKm(dist) {
+        return dist >= 10 ? Math.trunc(dist).toString() : dist.toFixed(2);
+    }
 
     const ICONS = {
         start: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Start-flag.png',
@@ -938,13 +944,13 @@
 
             switchMode(state.currentMode || 'REC');
 
-            document.getElementById('total').innerText = totalDist.toFixed(2);
+            document.getElementById('total').innerText = formatKm(totalDist);
             
             if (currentMode === 'NAV' && isOffTrack && offTrackAnchor) {
                 document.getElementById('partialLabel').innerText = "Return to Track (Meters)";
                 document.getElementById('partial').innerText = "---";
             } else {
-                document.getElementById('partial').innerText = partialDist.toFixed(2);
+                document.getElementById('partial').innerText = formatKm(partialDist);
             }
 
             const ms = accumulatedTime;
@@ -1032,8 +1038,8 @@
             document.getElementById('total').innerText = "0.00";
             document.getElementById('partial').innerText = "0.00";
         } else if (mode === 'REC') {
-            document.getElementById('total').innerText = totalDist.toFixed(2);
-            document.getElementById('partial').innerText = partialDist.toFixed(2);
+            document.getElementById('total').innerText = formatKm(totalDist);
+            document.getElementById('partial').innerText = formatKm(partialDist);
         }
         
         if (mode === 'NAV' && navWaypoints.length > 0) {
@@ -1869,7 +1875,7 @@
                         partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
                         
                         let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
-                        speak("Next waypoint, " + nextCleanName + " in " + partialDist.toFixed(2) + " kilometers");
+                        speak("Next waypoint, " + nextCleanName + " in " + formatKm(partialDist) + " kilometers");
                     }
                 } else if (minPathDist <= 0.035 && distToStartGate > 0.050) {
                     // HOT JOIN: MID-STAGE ENTRANCE
@@ -1898,11 +1904,11 @@
                         partialDist = calculateDistanceAlongPath(currentPathIdx, targetWpPathIdx);
                         
                         let nextCleanName = formatWpName(navWaypoints[activeWpIndex].name);
-                        speak("Next waypoint, " + nextCleanName + " in " + partialDist.toFixed(2) + " kilometers");
+                        speak("Next waypoint, " + nextCleanName + " in " + formatKm(partialDist) + " kilometers");
                     }
                 } else {
                     // WAITING TO START OR NOT ON TRACK
-                    document.getElementById('partial').innerText = distToStartGate.toFixed(2);
+                    document.getElementById('partial').innerText = formatKm(distToStartGate);
                     document.getElementById('total').innerText = "0.00";
                 }
             }
@@ -1911,7 +1917,7 @@
                 let currentPathIdx = findClosestPathIndex(latitude, longitude);
                 let finishPathIdx = navPathCoords.length - 1;
                 let trackDistanceToFinish = calculateDistanceAlongPath(currentPathIdx, finishPathIdx);
-                document.getElementById('total').innerText = trackDistanceToFinish.toFixed(2);
+                document.getElementById('total').innerText = formatKm(trackDistanceToFinish);
 
                 // FIX: Dynamic Visual Progress Bar on the Top Button
                 if (window.lastFinishIdx !== finishPathIdx) {
@@ -2135,7 +2141,7 @@
                         
                         if (partialDist < 0) partialDist = 0;
                         const distToWp = partialDist;
-                        document.getElementById('partial').innerText = distToWp.toFixed(2);
+                        document.getElementById('partial').innerText = formatKm(distToWp);
                         
                         const distM = distToWp * 1000;
                         const cleanName = formatWpName(target.name);
@@ -2284,7 +2290,7 @@
                                     
                                     // FIX: Sync voice with the true road path distance instead of a direct line
                                     let nextDist = partialDist; 
-                                    speak("Distance to " + nextName + " is " + nextDist.toFixed(2) + " kilometers");
+                                    speak("Distance to " + nextName + " is " + formatKm(nextDist) + " kilometers");
                                     
                                     let nextDistM = nextDist * 1000;
                                     if (nextDistM <= 530 && nextDistM >= 450) {
@@ -2369,7 +2375,7 @@
             // FIX: Keep counting partial distance upwards to the STOP point
             if (currentMode === 'NAV' && window.isPostFlying) {
                 partialDist += d;
-                document.getElementById('partial').innerText = partialDist.toFixed(2);
+                document.getElementById('partial').innerText = formatKm(partialDist);
                 document.getElementById('total').innerText = "0.00"; 
             }
             
@@ -2378,8 +2384,8 @@
                     document.getElementById('total').innerText = "0.00";
                     document.getElementById('partial').innerText = "0.00";
                 } else {
-                    document.getElementById('total').innerText = totalDist.toFixed(2);
-                    document.getElementById('partial').innerText = partialDist.toFixed(2);
+                    document.getElementById('total').innerText = formatKm(totalDist);
+                    document.getElementById('partial').innerText = formatKm(partialDist);
                 }
             }
             if (navStarted || currentMode === 'REC') {
@@ -2618,14 +2624,18 @@
     function mark(type) {
         if (!lastCoords) return;
         let n = "", s = "", iconKey = "";
-        const dist = totalDist.toFixed(2);
+        
+        // We keep exact decimals for the KML name, but use formatKm for the voice
+        const distKml = totalDist.toFixed(2); 
+        const distVoice = formatKm(totalDist);
+
         if (type === 'start') { n = "START FLAG"; iconKey = "start"; }
-        else if (type === 'long') { n = "NO S"; s = `No Safety Marshal saved at ${dist} kilometers`; iconKey = "nos"; }
-        else if (type === 'double') { n = `RP${globalWpCounter++}`; s = `Radio Point ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "rp"; }
-        else if (type === 'marshal') { n = `S${globalWpCounter++}`; s = `S ${globalWpCounter-1} saved at ${dist} kilometers`; iconKey = "s"; }
+        else if (type === 'long') { n = "NO S"; s = `No Safety Marshal saved at ${distVoice} kilometers`; iconKey = "nos"; }
+        else if (type === 'double') { n = `RP${globalWpCounter++}`; s = `Radio Point ${globalWpCounter-1} saved at ${distVoice} kilometers`; iconKey = "rp"; }
+        else if (type === 'marshal') { n = `S${globalWpCounter++}`; s = `S ${globalWpCounter-1} saved at ${distVoice} kilometers`; iconKey = "s"; }
         
         // Check if it's the NO S button to strip the distance, otherwise keep it for everything else
-        let finalName = (type === 'long') ? n : `${n} | ${dist}KM`;
+        let finalName = (type === 'long') ? n : `${n} | ${distKml}KM`;
         
         waypoints.push({ lat: lastCoords.lat, lon: lastCoords.lon, ele: lastCoords.ele, name: finalName, type: iconKey });
         saveStateToVault();
