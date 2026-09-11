@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.42</title>
+    <title>StageMaster 11.43</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.42</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.43</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -3040,6 +3040,23 @@
                 window.mapReviewLiveMarkers[carId].lastActive = compData.timestamp;
             }
         });
+
+        // --- NEW: Active Ghost Sweeper for Map Review (Checks every 10 seconds) ---
+        if (!window.ghostSweeperMapReview) {
+            window.ghostSweeperMapReview = setInterval(() => {
+                const checkTime = Date.now();
+                if (window.mapReviewLiveMarkers) {
+                    for (const carId in window.mapReviewLiveMarkers) {
+                        // 120000ms = 2 minutes. Deletes ghost cars automatically!
+                        if (checkTime - window.mapReviewLiveMarkers[carId].lastActive > 120000) {
+                            mapReviewInstance.removeLayer(window.mapReviewLiveMarkers[carId]);
+                            delete window.mapReviewLiveMarkers[carId];
+                        }
+                    }
+                }
+            }, 10000);
+        }
+        // --------------------------------------------------------------------------
 
         // --- NEW: Draw Pre-loaded KML on Map Review ---
         if (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) {
