@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.41</title>
+    <title>StageMaster 11.42</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.41</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.42</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -673,6 +673,8 @@
         let clean = name.split('|')[0].trim();
         if (clean.toUpperCase().startsWith('RP')) return clean.replace(/RP/i, 'Radio Point ');
         if (clean.toUpperCase().startsWith('S')) return clean.replace(/S/i, 'S ');
+        // Force the voice to say "NO S" even if the KML says 1000 MIGLIA
+        if (clean.toUpperCase().includes('1000 MIGLIA') || clean.toUpperCase() === 'NO S') return 'NO S';
         return clean;
     }
 
@@ -2630,7 +2632,8 @@
         const distVoice = formatKm(totalDist);
 
         if (type === 'start') { n = "START FLAG"; iconKey = "start"; }
-        else if (type === 'long') { n = "NO S"; s = `No Safety Marshal saved at ${distVoice} kilometers`; iconKey = "nos"; }
+        // Save as 1000 MIGLIA for the KML, but keep the voice confirmation unchanged
+        else if (type === 'long') { n = "1000 MIGLIA"; s = `No Safety Marshal saved at ${distVoice} kilometers`; iconKey = "nos"; }
         else if (type === 'double') { n = `RP${globalWpCounter++}`; s = `Radio Point ${globalWpCounter-1} saved at ${distVoice} kilometers`; iconKey = "rp"; }
         else if (type === 'marshal') { n = `S${globalWpCounter++}`; s = `S ${globalWpCounter-1} saved at ${distVoice} kilometers`; iconKey = "s"; }
         
