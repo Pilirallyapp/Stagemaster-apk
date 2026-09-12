@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.43</title>
+    <title>StageMaster 11.50</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -148,19 +148,19 @@
     
     <!-- Greek Selection -->
     <div style="margin-bottom: 30px; cursor: pointer;" onclick="selectLanguage('el')">
-        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/gr-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <img src="gr-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
         <div style="font-size: 1.4rem; font-weight: bold; color: white; text-transform: uppercase;">Επιλογή γλώσσας</div>
     </div>
     
     <!-- English Selection -->
     <div style="margin-bottom: 30px; cursor: pointer;" onclick="selectLanguage('en')">
-        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/eng-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <img src="eng-flag.png" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
         <div style="font-size: 1.4rem; font-weight: bold; color: white; text-transform: uppercase;">Language selection</div>
     </div>
 
     <!-- Map Review Selection -->
     <div style="cursor: pointer;" onclick="openMapReviewFromLaunch()">
-        <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/map-review.svg" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+        <img src="map-review.svg" style="width: 140px; height: 90px; object-fit: cover; border-radius: 8px; border: 2px solid #555; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
         <div style="font-size: 1.4rem; font-weight: bold; color: #bf953f; text-transform: uppercase;">Map Review</div>
     </div>
 
@@ -294,19 +294,19 @@
         <button class="wp-btn" id="btn-rp">
             <div class="progress-ring" id="ring-rp"></div>
             <div class="wp-counter" id="count-rp" style="color: #fbbc05;">0</div>
-            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Yellow-thunder.png">
+            <img src="Yellow-thunder.png">
             <div class="wp-label" style="color: #fbbc05;">Rp</div>
         </button>
         <button class="wp-btn" id="btn-nos">
             <div class="progress-ring" id="ring-nos"></div>
             <div class="wp-counter" id="count-nos" style="color: #1a73e8;">0</div>
-            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/blue_pin.png"> 
+            <img src="blue_pin.png"> 
             <div class="wp-label" style="color: #1a73e8;">No s</div>
         </button>
         <button class="wp-btn" id="btn-marshal">
             <div class="progress-ring" id="ring-marshal"></div>
             <div class="wp-counter" id="count-marshal" style="color: #e67e22;">0</div>
-            <img src="https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Orange-marshal.png">
+            <img src="Orange-marshal.png">
             <div class="wp-label" style="color: #e67e22;">Marshal</div>
         </button>
     </div>
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.43</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.50</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -533,11 +533,11 @@
     }
 
     const ICONS = {
-        start: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Start-flag.png',
-        finish: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Flying-flag.png',
-        s: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Orange-marshal.png',
-        rp: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Yellow-thunder.png',
-        nos: 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/1000-MIGLIA.png'
+        start: 'Start-flag.png',
+        finish: 'Flying-flag.png',
+        s: 'Orange-marshal.png',
+        rp: 'Yellow-thunder.png',
+        nos: '1000-MIGLIA.png'
     };
 
     const GR_VOICE_TRANSLATIONS = {
