@@ -32,6 +32,8 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/
+          cp *.png www/
+          cp *.svg www/
 
       - name: Add Android Platform
         run: npx cap add android
