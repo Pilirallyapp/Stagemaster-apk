@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.60</title>
+    <title>StageMaster 11.65</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.60</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.65</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -722,10 +722,10 @@
         else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'MARSHAL.png';
 
         let carIcon = L.divIcon({
-            html: `<img id="mapCarImg" src="${myCarImgUrl}" style="width:60px;height:60px;transform: rotate(0deg); display: block !important; margin: auto; transition: transform 0.1s linear; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8));">`,
+            html: `<img id="mapCarImg" src="${myCarImgUrl}" style="width:48px;height:96px;transform: rotate(0deg); display: block !important; margin: auto; transition: transform 0.1s linear; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8));">`,
             className: 'custom-car-div',
-            iconSize: [60, 60],
-            iconAnchor: [30, 30]
+            iconSize: [48, 96],
+            iconAnchor: [24, 48]
         });
         mapCarMarker = L.marker([38.052, 23.828], { icon: carIcon, zIndexOffset: 1000 }).addTo(liveMap);
 
@@ -774,10 +774,10 @@
                     // Build an icon dynamically so it includes the text label and speed
                     let dynamicCompetitorIcon = L.divIcon({
                         html: `<div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color:#fbbc05; font-size:12px;">${displaySpeed}km/h</span></div>
-                               <img src="${compCarImgUrl}" style="width:60px;height:60px; display: block !important; margin: auto; filter: ${compFilter}; position: relative; z-index: 1;">`,
+                               <img src="${compCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: ${compFilter}; position: relative; z-index: 1;">`,
                         className: 'custom-car-div',
-                        iconSize: [90, 80], // Widened to fit the ID and Speed text cleanly
-                        iconAnchor: [45, 45] // Re-centered for the new 90px width
+                        iconSize: [90, 110], // Widened to fit the ID, heightened for the 96px image
+                        iconAnchor: [45, 55] // Re-centered
                     });
 
                     // Update existing marker or create a new one for each car
@@ -2956,11 +2956,11 @@
             let carIcon = L.divIcon({
                 html: `<div id="mapReviewCarImg" style="transform: rotate(0deg); transition: transform 0.1s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                            <div id="mapReviewCarLabel" style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${myCarId} <span style="color: #fbbc05; font-size: 12px;">0km/h</span></div>
-                           <img src="${myCarImgUrl}" style="width:60px;height:60px; display: block !important; margin: auto; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8)); position: relative; z-index: 1;">
+                           <img src="${myCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8)); position: relative; z-index: 1;">
                        </div>`,
                 className: 'custom-car-div',
-                iconSize: [90, 80],
-                iconAnchor: [45, 45]
+                iconSize: [90, 110],
+                iconAnchor: [45, 55]
             });
             mapReviewCarMarker = L.marker([38.052, 23.828], { icon: carIcon, zIndexOffset: 1000 }).addTo(mapReviewInstance);
 
@@ -3024,11 +3024,11 @@
                     let dynamicReviewIcon = L.divIcon({
                         html: `<div style="transform: rotate(${heading}deg); transition: transform 0.2s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                                    <div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color: #fbbc05; font-size: 12px;">${displaySpeed}km/h</span></div>
-                                   <img src="${compCarImgUrl}" style="width:50px;height:50px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1;">
+                                   <img src="${compCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1;">
                                </div>`,
                         className: 'custom-car-div',
-                        iconSize: [80, 70],
-                        iconAnchor: [40, 35]
+                        iconSize: [90, 110],
+                        iconAnchor: [45, 55]
                     });
 
                     if (!window.mapReviewLiveMarkers[carId]) {
@@ -3248,10 +3248,10 @@
 
                     let dynamicReviewIcon = L.divIcon({
                         html: `<div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color: #fbbc05; font-size: 12px;">${displaySpeed}km/h</span></div>
-                               <img src="${compCarImgUrl}" style="width:50px;height:50px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1; transform: rotate(${heading}deg); transition: transform 0.2s linear;">`,
+                               <img src="${compCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1; transform: rotate(${heading}deg); transition: transform 0.2s linear;">`,
                         className: 'custom-car-div',
-                        iconSize: [80, 70], // Widened to fit the ID and Speed text cleanly
-                        iconAnchor: [40, 35] // Re-centered for the new 80px width
+                        iconSize: [90, 110], // Widened to fit the ID and Speed text cleanly
+                        iconAnchor: [45, 55] // Re-centered for the new 80px width
                     });
 
                     // Update existing marker or create a new one for each car
