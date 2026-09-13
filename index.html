@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.50</title>
+    <title>StageMaster 11.60</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.50</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.60</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -713,13 +713,13 @@
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '' }).addTo(liveMap);
         
         let myUpperId = (myCarId || "").toUpperCase();
-        let myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
-        if (myUpperId.includes("MIV")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
-        else if (myUpperId.includes("AMB")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
-        else if (myUpperId.includes("PLAT")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
-        else if (myUpperId.includes("FIRE")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
-        else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
-        else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+        let myCarImgUrl = 'OTHER.png'; 
+        if (myUpperId.includes("MIV")) myCarImgUrl = 'MIV.png';
+        else if (myUpperId.includes("AMB")) myCarImgUrl = 'AMBULANCE.png';
+        else if (myUpperId.includes("PLAT")) myCarImgUrl = 'PLATFORM.png';
+        else if (myUpperId.includes("FIRE")) myCarImgUrl = 'FIRE.png';
+        else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'RP.png';
+        else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'MARSHAL.png';
 
         let carIcon = L.divIcon({
             html: `<img id="mapCarImg" src="${myCarImgUrl}" style="width:60px;height:60px;transform: rotate(0deg); display: block !important; margin: auto; transition: transform 0.1s linear; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8));">`,
@@ -760,13 +760,13 @@
                     let displaySpeed = window.cachedSpeeds[carId].speed;
                     
                     let compUpperId = carId.toUpperCase();
-                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
-                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
-                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
-                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
-                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
-                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
-                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+                    let compCarImgUrl = 'OTHER.png'; 
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'MIV.png';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'AMBULANCE.png';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'PLATFORM.png';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'FIRE.png';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'RP.png';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'MARSHAL.png';
 
                     // Remove the black filter completely since the new Other.svg has its own high-visibility colors
                     let compFilter = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
@@ -2945,13 +2945,13 @@
             }).addTo(mapReviewInstance);
 
             let myUpperId = (myCarId || "").toUpperCase();
-            let myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
-            if (myUpperId.includes("MIV")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
-            else if (myUpperId.includes("AMB")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
-            else if (myUpperId.includes("PLAT")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
-            else if (myUpperId.includes("FIRE")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
-            else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
-            else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+            let myCarImgUrl = 'OTHER.png'; 
+            if (myUpperId.includes("MIV")) myCarImgUrl = 'MIV.png';
+            else if (myUpperId.includes("AMB")) myCarImgUrl = 'AMBULANCE.png';
+            else if (myUpperId.includes("PLAT")) myCarImgUrl = 'PLATFORM.png';
+            else if (myUpperId.includes("FIRE")) myCarImgUrl = 'FIRE.png';
+            else if (myUpperId.match(/^RP\s*\d*$/) || myUpperId.includes("RADIO")) myCarImgUrl = 'RP.png';
+            else if (myUpperId.match(/^S\s*\d*$/) || myUpperId.includes("MARSHAL")) myCarImgUrl = 'MARSHAL.png';
 
             let carIcon = L.divIcon({
                 html: `<div id="mapReviewCarImg" style="transform: rotate(0deg); transition: transform 0.1s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -3010,13 +3010,13 @@
                     let displaySpeed = window.cachedSpeeds[carId].speed;
                     
                     let compUpperId = carId.toUpperCase();
-                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
-                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
-                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
-                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
-                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
-                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
-                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+                    let compCarImgUrl = 'OTHER.png'; 
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'MIV.png';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'AMBULANCE.png';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'PLATFORM.png';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'FIRE.png';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'RP.png';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'MARSHAL.png';
 
                     let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
                     let heading = compData.heading || 0;
@@ -3233,13 +3233,13 @@
                     let displaySpeed = window.cachedSpeeds[carId].speed;
                     
                     let compUpperId = carId.toUpperCase();
-                    let compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Other.svg';
-                    if (compUpperId.includes("MIV")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/MIV.svg';
-                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Ambulance.svg';
-                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Platform.svg';
-                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Fire%20Brigade.svg';
-                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/RP.svg';
-                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'https://raw.githubusercontent.com/Pilirallyapp/stagemaster/main/Marshal.svg';
+                    let compCarImgUrl = 'OTHER.png'; 
+                    if (compUpperId.includes("MIV")) compCarImgUrl = 'MIV.png';
+                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'AMBULANCE.png';
+                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'PLATFORM.png';
+                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'FIRE.png';
+                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'RP.png';
+                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'MARSHAL.png';
 
                     let isMe = (carId === myCarId);
                     // Standardize the shadow filter for all cars
