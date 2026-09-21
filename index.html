@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.65</title>
+    <title>StageMaster 11.70</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -319,7 +319,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.65</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.70</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2681,8 +2681,11 @@
     async function exportKML() {
         const fileName = document.getElementById('stageName').value || "StageMaster_SS";
         let kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${fileName}</name>`;
+        
+        const githubIconBaseUrl = "https://raw.githubusercontent.com/Pilirallyapp/Stagemaster-apk/main/"; 
+        
         Object.keys(ICONS).forEach(key => {
-            kml += `<Style id="${key}Icon"><IconStyle><Icon><href>${ICONS[key]}</href></Icon><scale>2.5</scale></IconStyle></Style>`;
+            kml += `<Style id="${key}Icon"><IconStyle><Icon><href>${githubIconBaseUrl}${ICONS[key]}</href></Icon><scale>2.5</scale></IconStyle></Style>`;
         });
         waypoints.forEach(wp => {
             let style = wp.type ? `<styleUrl>#${wp.type}Icon</styleUrl>` : '';
