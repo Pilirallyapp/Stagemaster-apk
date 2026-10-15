@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.70</title>
+    <title>StageMaster 11.80</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -106,6 +106,24 @@
         .reg-table { width: 100%; text-align: left; border-collapse: collapse; font-family: monospace; font-size: 0.9rem; }
         .reg-table th { padding: 8px 4px; border-bottom: 2px solid #555; color: #aaa; position: sticky; top: 0; background: #2d2d2d; }
         .reg-table td { padding: 10px 4px; border-bottom: 1px solid #333; }
+
+        /* --- CAR 30-SECOND STOP ALARM --- */
+        @keyframes car-stop-alarm {
+            0% { filter: drop-shadow(0 0 2px #000); transform: scale(1); }
+            50% { filter: sepia(100%) saturate(10000%) hue-rotate(350deg) drop-shadow(0 0 18px #ff0000) drop-shadow(0 0 30px #ff0000); transform: scale(1.18); }
+            100% { filter: drop-shadow(0 0 2px #000); transform: scale(1); }
+        }
+        .car-alarm-blink {
+            animation: car-stop-alarm 0.6s infinite ease-in-out !important;
+        }
+        .car-alarm-label {
+            background: #ea4335 !important;
+            color: #ffffff !important;
+            padding: 2px 6px !important;
+            border-radius: 6px !important;
+            border: 1.5px solid #ffffff !important;
+            box-shadow: 0 0 12px #ff0000 !important;
+        }
     </style>
 
 <!-- FIREBASE SCRIPTS -->
@@ -319,7 +337,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.70</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.80</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -2928,6 +2946,32 @@
     let mapReviewTrackUpMode = false;
     let mapReviewLocateInterval = null;
 
+    // 100% Offline Embedded WRC Rally Car SVG (Top-Down)
+    const RALLY_CAR_SVG = "data:image/svg+xml;utf8," + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 240" width="48" height="96">
+      <path d="M25,18 C40,6 80,6 95,18 L102,45 L18,45 Z" fill="#111" stroke="#bf953f" stroke-width="2"/>
+      <rect x="8" y="38" width="14" height="36" rx="5" fill="#111"/>
+      <rect x="98" y="38" width="14" height="36" rx="5" fill="#111"/>
+      <rect x="8" y="162" width="14" height="38" rx="5" fill="#111"/>
+      <rect x="98" y="162" width="14" height="38" rx="5" fill="#111"/>
+      <path d="M22,22 C40,10 80,10 98,22 L106,42 L106,80 L100,95 L100,145 L106,160 L106,205 C106,218 92,224 85,224 L35,224 C28,224 14,218 14,205 L14,160 L20,145 L20,95 L14,80 L14,42 Z" fill="#0055ff" stroke="#ffffff" stroke-width="3"/>
+      <path d="M48,15 L48,75 M72,15 L72,75" stroke="#bf953f" stroke-width="5"/>
+      <path d="M35,35 L45,42 L45,52 L35,45 Z M85,35 L75,42 L75,52 L85,45 Z" fill="#111"/>
+      <path d="M22,23 L38,18 L34,28 L20,30 Z" fill="#ffeb3b"/>
+      <path d="M98,23 L82,18 L86,28 L100,30 Z" fill="#ffeb3b"/>
+      <path d="M20,82 L6,76 L8,86 L20,88 Z" fill="#ea4335"/>
+      <path d="M100,82 L114,76 L112,86 L100,88 Z" fill="#ea4335"/>
+      <path d="M26,70 C45,62 75,62 94,70 L88,96 L32,96 Z" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+      <path d="M26,70 C45,62 75,62 94,70 L92,78 C75,71 45,71 28,78 Z" fill="#ea4335"/>
+      <rect x="32" y="96" width="56" height="54" rx="6" fill="#003bb3"/>
+      <rect x="42" y="108" width="36" height="32" rx="4" fill="#ffffff" stroke="#111" stroke-width="1.5"/>
+      <path d="M52,92 L68,92 L64,106 L56,106 Z" fill="#ea4335" stroke="#fff" stroke-width="1"/>
+      <path d="M32,150 L88,150 L92,178 L28,178 Z" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+      <rect x="10" y="198" width="100" height="22" rx="3" fill="#ea4335" stroke="#ffffff" stroke-width="2"/>
+      <rect x="10" y="194" width="6" height="30" rx="2" fill="#111"/>
+      <rect x="104" y="194" width="6" height="30" rx="2" fill="#111"/>
+    </svg>`);
+
     function openMapReviewFromLaunch() {
         requestWakeLock();
         document.getElementById('languageOverlay').style.display = 'none';
@@ -2949,7 +2993,8 @@
 
             let myUpperId = (myCarId || "").toUpperCase();
             let myCarImgUrl = 'OTHER.png'; 
-            if (myUpperId.includes("MIV")) myCarImgUrl = 'MIV.png';
+            if (myUpperId.includes("CAR")) myCarImgUrl = RALLY_CAR_SVG;
+            else if (myUpperId.includes("MIV")) myCarImgUrl = 'MIV.png';
             else if (myUpperId.includes("AMB")) myCarImgUrl = 'AMBULANCE.png';
             else if (myUpperId.includes("PLAT")) myCarImgUrl = 'PLATFORM.png';
             else if (myUpperId.includes("FIRE")) myCarImgUrl = 'FIRE.png';
@@ -2959,20 +3004,95 @@
             let carIcon = L.divIcon({
                 html: `<div id="mapReviewCarImg" style="transform: rotate(0deg); transition: transform 0.1s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                            <div id="mapReviewCarLabel" style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${myCarId} <span style="color: #fbbc05; font-size: 12px;">0km/h</span></div>
-                           <img src="${myCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8)); position: relative; z-index: 1;">
+                           <img id="mapReviewMyCarSprite" src="${myCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.8)); position: relative; z-index: 1;">
                        </div>`,
                 className: 'custom-car-div',
-                iconSize: [90, 110],
-                iconAnchor: [45, 55]
+                iconSize: [110, 115],
+                iconAnchor: [55, 57]
             });
             mapReviewCarMarker = L.marker([38.052, 23.828], { icon: carIcon, zIndexOffset: 1000 }).addTo(mapReviewInstance);
 
             if (!window.mapReviewLiveMarkers) window.mapReviewLiveMarkers = {};
+            if (!window.carStopTrackers) window.carStopTrackers = {};
+            if (!window.latestCarsSnapshot) window.latestCarsSnapshot = {};
+
+            // Helper function that evaluates if a CAR has been stopped (< 2 km/h) for >= 30 seconds
+            function evaluateCarStopState(carId, carData, checkTime) {
+                let upperId = (carId || "").toUpperCase();
+                if (!upperId.includes("CAR")) return false;
+
+                let liveSpeed = carData.speed || 0;
+                if (!window.carStopTrackers[carId]) {
+                    window.carStopTrackers[carId] = { stoppedSince: null };
+                }
+
+                if (liveSpeed < 2.0) {
+                    if (window.carStopTrackers[carId].stoppedSince === null) {
+                        window.carStopTrackers[carId].stoppedSince = checkTime;
+                    }
+                } else {
+                    window.carStopTrackers[carId].stoppedSince = null;
+                }
+
+                return (window.carStopTrackers[carId].stoppedSince !== null && (checkTime - window.carStopTrackers[carId].stoppedSince >= 30000));
+            }
+
+            // Helper function to render/update any competitor marker on Map Review
+            function renderCompetitorOnMapReview(carId, compData, now) {
+                if (!window.cachedSpeeds) window.cachedSpeeds = {};
+                let currentSpeed = Math.round(compData.speed || 0);
+                if (!window.cachedSpeeds[carId] || (now - window.cachedSpeeds[carId].lastUpdate > 15000)) {
+                    window.cachedSpeeds[carId] = { speed: currentSpeed, lastUpdate: now };
+                }
+                let displaySpeed = window.cachedSpeeds[carId].speed;
+                
+                let compUpperId = carId.toUpperCase();
+                let isRaceCar = compUpperId.includes("CAR");
+                let compCarImgUrl = 'OTHER.png'; 
+                if (isRaceCar) compCarImgUrl = RALLY_CAR_SVG;
+                else if (compUpperId.includes("MIV")) compCarImgUrl = 'MIV.png';
+                else if (compUpperId.includes("AMB")) compCarImgUrl = 'AMBULANCE.png';
+                else if (compUpperId.includes("PLAT")) compCarImgUrl = 'PLATFORM.png';
+                else if (compUpperId.includes("FIRE")) compCarImgUrl = 'FIRE.png';
+                else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'RP.png';
+                else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'MARSHAL.png';
+
+                // Check 30-second stop alarm for CAR category
+                let isStoppedAlarm = evaluateCarStopState(carId, compData, now);
+                if (isStoppedAlarm) displaySpeed = 0; // Show 0 km/h immediately when alarm is active
+
+                let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
+                let heading = compData.heading || 0;
+                let alarmImgClass = isStoppedAlarm ? 'car-alarm-blink' : '';
+                let alarmLabelClass = isStoppedAlarm ? 'car-alarm-label' : '';
+                let speedColor = isStoppedAlarm ? '#ffffff' : '#fbbc05';
+
+                let dynamicReviewIcon = L.divIcon({
+                    html: `<div style="transform: rotate(${heading}deg); transition: transform 0.2s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                               <div class="${alarmLabelClass}" style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2; white-space: nowrap;">${isStoppedAlarm ? '🚨 ' : ''}${carId} <span style="color: ${speedColor}; font-size: 12px;">${displaySpeed}km/h</span></div>
+                               <img class="${alarmImgClass}" src="${compCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1;">
+                           </div>`,
+                    className: 'custom-car-div',
+                    iconSize: [110, 115],
+                    iconAnchor: [55, 57]
+                });
+
+                if (!window.mapReviewLiveMarkers[carId]) {
+                    window.mapReviewLiveMarkers[carId] = L.marker([compData.lat, compData.lon], { icon: dynamicReviewIcon, zIndexOffset: isStoppedAlarm ? 2000 : 999 }).addTo(mapReviewInstance);
+                } else {
+                    window.mapReviewLiveMarkers[carId].setLatLng([compData.lat, compData.lon]);
+                    window.mapReviewLiveMarkers[carId].setIcon(dynamicReviewIcon);
+                    window.mapReviewLiveMarkers[carId].setZIndexOffset(isStoppedAlarm ? 2000 : 999);
+                }
+                window.mapReviewLiveMarkers[carId].lastActive = compData.timestamp;
+                window.mapReviewLiveMarkers[carId].isAlarming = isStoppedAlarm;
+            }
 
             database.ref('live_stage').on('value', (snapshot) => {
                 const allCars = snapshot.val();
                 if (!allCars || !mapReviewInstance) return;
 
+                window.latestCarsSnapshot = allCars;
                 const now = Date.now();
 
                 for (const carId in allCars) {
@@ -2982,12 +3102,21 @@
                             mapReviewCarMarker.setLatLng([myData.lat, myData.lon]);
                             
                             let mySpeed = Math.round(myData.speed || 0);
+                            let isMyCarStoppedAlarm = evaluateCarStopState(myCarId, myData, now);
+                            if (isMyCarStoppedAlarm) mySpeed = 0;
+
                             let labelDiv = document.getElementById('mapReviewCarLabel');
+                            let spriteImg = document.getElementById('mapReviewMyCarSprite');
                             if (labelDiv) {
-                                labelDiv.innerHTML = `${myCarId} <span style="color: #fbbc05; font-size: 12px;">${mySpeed}km/h</span>`;
+                                labelDiv.className = isMyCarStoppedAlarm ? 'car-alarm-label' : '';
+                                let spdColor = isMyCarStoppedAlarm ? '#ffffff' : '#fbbc05';
+                                labelDiv.innerHTML = `${isMyCarStoppedAlarm ? '🚨 ' : ''}${myCarId} <span style="color: ${spdColor}; font-size: 12px;">${mySpeed}km/h</span>`;
+                            }
+                            if (spriteImg) {
+                                if (isMyCarStoppedAlarm) spriteImg.classList.add('car-alarm-blink');
+                                else spriteImg.classList.remove('car-alarm-blink');
                             }
 
-                            // Ensures your local car updates its heading on the map even in North-Up mode
                             if (!mapReviewTrackUpMode) {
                                 let localCarWrapper = document.getElementById('mapReviewCarImg');
                                 if (localCarWrapper) localCarWrapper.style.transform = `rotate(${myData.heading || 0}deg)`;
@@ -3002,110 +3131,101 @@
                             mapReviewInstance.removeLayer(window.mapReviewLiveMarkers[carId]);
                             delete window.mapReviewLiveMarkers[carId];
                         }
+                        if (window.carStopTrackers && window.carStopTrackers[carId]) {
+                            delete window.carStopTrackers[carId];
+                        }
                         continue;
                     }
 
-                    if (!window.cachedSpeeds) window.cachedSpeeds = {};
-                    let currentSpeed = Math.round(compData.speed || 0);
-                    if (!window.cachedSpeeds[carId] || (now - window.cachedSpeeds[carId].lastUpdate > 15000)) {
-                        window.cachedSpeeds[carId] = { speed: currentSpeed, lastUpdate: now };
-                    }
-                    let displaySpeed = window.cachedSpeeds[carId].speed;
-                    
-                    let compUpperId = carId.toUpperCase();
-                    let compCarImgUrl = 'OTHER.png'; 
-                    if (compUpperId.includes("MIV")) compCarImgUrl = 'MIV.png';
-                    else if (compUpperId.includes("AMB")) compCarImgUrl = 'AMBULANCE.png';
-                    else if (compUpperId.includes("PLAT")) compCarImgUrl = 'PLATFORM.png';
-                    else if (compUpperId.includes("FIRE")) compCarImgUrl = 'FIRE.png';
-                    else if (compUpperId.match(/^RP\s*\d*$/) || compUpperId.includes("RADIO")) compCarImgUrl = 'RP.png';
-                    else if (compUpperId.match(/^S\s*\d*$/) || compUpperId.includes("MARSHAL")) compCarImgUrl = 'MARSHAL.png';
-
-                    let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
-                    let heading = compData.heading || 0;
-
-                    let dynamicReviewIcon = L.divIcon({
-                        html: `<div style="transform: rotate(${heading}deg); transition: transform 0.2s linear; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                   <div style="text-align: center; font-weight: bold; font-family: monospace; font-size: 14px; color: white; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; margin-bottom: -10px; position: relative; z-index: 2;">${carId} <span style="color: #fbbc05; font-size: 12px;">${displaySpeed}km/h</span></div>
-                                   <img src="${compCarImgUrl}" style="width:48px;height:96px; display: block !important; margin: auto; filter: ${filterColor}; position: relative; z-index: 1;">
-                               </div>`,
-                        className: 'custom-car-div',
-                        iconSize: [90, 110],
-                        iconAnchor: [45, 55]
-                    });
-
-                    if (!window.mapReviewLiveMarkers[carId]) {
-                    window.mapReviewLiveMarkers[carId] = L.marker([compData.lat, compData.lon], { icon: dynamicReviewIcon, zIndexOffset: 999 }).addTo(mapReviewInstance);
-                } else {
-                    window.mapReviewLiveMarkers[carId].setLatLng([compData.lat, compData.lon]);
-                    window.mapReviewLiveMarkers[carId].setIcon(dynamicReviewIcon);
+                    renderCompetitorOnMapReview(carId, compData, now);
                 }
-                window.mapReviewLiveMarkers[carId].lastActive = compData.timestamp;
-            }
-        });
+            });
 
-        // --- NEW: Active Ghost Sweeper for Map Review (Checks every 10 seconds) ---
-        if (!window.ghostSweeperMapReview) {
-            window.ghostSweeperMapReview = setInterval(() => {
-                const checkTime = Date.now();
-                if (window.mapReviewLiveMarkers) {
-                    for (const carId in window.mapReviewLiveMarkers) {
-                        // 120000ms = 2 minutes. Deletes ghost cars automatically!
-                        if (checkTime - window.mapReviewLiveMarkers[carId].lastActive > 120000) {
-                            mapReviewInstance.removeLayer(window.mapReviewLiveMarkers[carId]);
-                            delete window.mapReviewLiveMarkers[carId];
+            // --- Active Ghost Sweeper & 1-Second Stop Timer Watchdog ---
+            // Runs every 1 second so a stopped CAR starts blinking at the exact 30.0s mark even if its GPS pauses sending updates
+            if (!window.ghostSweeperMapReview) {
+                window.ghostSweeperMapReview = setInterval(() => {
+                    const checkTime = Date.now();
+                    if (window.mapReviewLiveMarkers) {
+                        for (const carId in window.mapReviewLiveMarkers) {
+                            if (checkTime - window.mapReviewLiveMarkers[carId].lastActive > 120000) {
+                                mapReviewInstance.removeLayer(window.mapReviewLiveMarkers[carId]);
+                                delete window.mapReviewLiveMarkers[carId];
+                                if (window.carStopTrackers) delete window.carStopTrackers[carId];
+                                continue;
+                            }
+                            // Check if a stopped car just crossed the 30s threshold
+                            if (window.latestCarsSnapshot && window.latestCarsSnapshot[carId]) {
+                                let compData = window.latestCarsSnapshot[carId];
+                                let shouldAlarm = evaluateCarStopState(carId, compData, checkTime);
+                                if (shouldAlarm !== window.mapReviewLiveMarkers[carId].isAlarming) {
+                                    renderCompetitorOnMapReview(carId, compData, checkTime);
+                                }
+                            }
                         }
                     }
-                }
-            }, 10000);
-        }
-        // --------------------------------------------------------------------------
-
-        // --- NEW: Draw Pre-loaded KML on Map Review ---
-        if (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) {
-            let latlngs = navPathCoords.map(pt => [pt.lat, pt.lon]);
-            
-            // Clear old line if it exists
-            if (window.mapReviewRouteLine) {
-                mapReviewInstance.removeLayer(window.mapReviewRouteLine);
-            }
-            window.mapReviewRouteLine = L.polyline(latlngs, { color: '#ea4335', weight: 6, opacity: 0.8 }).addTo(mapReviewInstance);
-            
-            // Fit bounds so you can see ALL the path zooming in and out initially
-            mapReviewInstance.fitBounds(window.mapReviewRouteLine.getBounds());
-            
-            if (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
-                if (window.mapReviewWpMarkers && window.mapReviewWpMarkers.length > 0) {
-                    window.mapReviewWpMarkers.forEach(m => mapReviewInstance.removeLayer(m));
-                }
-                window.mapReviewWpMarkers = [];
-
-                navWaypoints.forEach((wp) => {
-                    let iconUrl = null;
-                    let searchStr = (wp.name + " " + (wp.desc || "")).toUpperCase();
-                    
-                    if (searchStr.includes("START")) iconUrl = ICONS.start;
-                    else if (searchStr.includes("FLYING") || searchStr.includes("FINISH")) iconUrl = ICONS.finish;
-                    else if (wp.type === "RP") iconUrl = ICONS.rp;
-                    else if (wp.type === "NOS") iconUrl = ICONS.nos;
-                    else if (wp.type === "MARSHAL") iconUrl = ICONS.s;
-
-                    if (iconUrl) {
-                        let isMiglia = (wp.type === "NOS");
-                        let customIcon = L.icon({
-                            iconUrl: iconUrl,
-                            iconSize: isMiglia ? [55, 55] : [35, 35],
-                            iconAnchor: isMiglia ? [27, 27] : [17, 17]
-                        });
-                        let marker = L.marker([wp.lat, wp.lon], { icon: customIcon, zIndexOffset: 500 }).addTo(mapReviewInstance);
-                        window.mapReviewWpMarkers.push(marker);
+                    // Also check own car if logged in as CAR X for testing
+                    if (myCarId && myCarId.toUpperCase().includes("CAR") && window.latestCarsSnapshot && window.latestCarsSnapshot[myCarId]) {
+                        let myData = window.latestCarsSnapshot[myCarId];
+                        let isMyCarStoppedAlarm = evaluateCarStopState(myCarId, myData, checkTime);
+                        let spriteImg = document.getElementById('mapReviewMyCarSprite');
+                        let labelDiv = document.getElementById('mapReviewCarLabel');
+                        if (spriteImg && labelDiv) {
+                            let currentlyBlinking = spriteImg.classList.contains('car-alarm-blink');
+                            if (isMyCarStoppedAlarm !== currentlyBlinking) {
+                                let mySpeed = isMyCarStoppedAlarm ? 0 : Math.round(myData.speed || 0);
+                                labelDiv.className = isMyCarStoppedAlarm ? 'car-alarm-label' : '';
+                                let spdColor = isMyCarStoppedAlarm ? '#ffffff' : '#fbbc05';
+                                labelDiv.innerHTML = `${isMyCarStoppedAlarm ? '🚨 ' : ''}${myCarId} <span style="color: ${spdColor}; font-size: 12px;">${mySpeed}km/h</span>`;
+                                if (isMyCarStoppedAlarm) spriteImg.classList.add('car-alarm-blink');
+                                else spriteImg.classList.remove('car-alarm-blink');
+                            }
+                        }
                     }
-                });
+                }, 1000);
             }
-        }
-        // ----------------------------------------------
-        
-        mapReviewInstance.on('dragstart', function() {
+
+            // --- Draw Pre-loaded KML on Map Review ---
+            if (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) {
+                let latlngs = navPathCoords.map(pt => [pt.lat, pt.lon]);
+                
+                if (window.mapReviewRouteLine) {
+                    mapReviewInstance.removeLayer(window.mapReviewRouteLine);
+                }
+                window.mapReviewRouteLine = L.polyline(latlngs, { color: '#ea4335', weight: 6, opacity: 0.8 }).addTo(mapReviewInstance);
+                mapReviewInstance.fitBounds(window.mapReviewRouteLine.getBounds());
+                
+                if (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+                    if (window.mapReviewWpMarkers && window.mapReviewWpMarkers.length > 0) {
+                        window.mapReviewWpMarkers.forEach(m => mapReviewInstance.removeLayer(m));
+                    }
+                    window.mapReviewWpMarkers = [];
+
+                    navWaypoints.forEach((wp) => {
+                        let iconUrl = null;
+                        let searchStr = (wp.name + " " + (wp.desc || "")).toUpperCase();
+                        
+                        if (searchStr.includes("START")) iconUrl = ICONS.start;
+                        else if (searchStr.includes("FLYING") || searchStr.includes("FINISH")) iconUrl = ICONS.finish;
+                        else if (wp.type === "RP") iconUrl = ICONS.rp;
+                        else if (wp.type === "NOS") iconUrl = ICONS.nos;
+                        else if (wp.type === "MARSHAL") iconUrl = ICONS.s;
+
+                        if (iconUrl) {
+                            let isMiglia = (wp.type === "NOS");
+                            let customIcon = L.icon({
+                                iconUrl: iconUrl,
+                                iconSize: isMiglia ? [55, 55] : [35, 35],
+                                iconAnchor: isMiglia ? [27, 27] : [17, 17]
+                            });
+                            let marker = L.marker([wp.lat, wp.lon], { icon: customIcon, zIndexOffset: 500 }).addTo(mapReviewInstance);
+                            window.mapReviewWpMarkers.push(marker);
+                        }
+                    });
+                }
+            }
+            
+            mapReviewInstance.on('dragstart', function() {
                 if (mapReviewTrackUpMode) {
                     toggleMapReviewTracking(); 
                 }
