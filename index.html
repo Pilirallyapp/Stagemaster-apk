@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.80</title>
+    <title>StageMaster 11.90</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -337,7 +337,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.80</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.90</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -464,8 +464,10 @@
         </div>
     </div>
     
-    <!-- Map Container Wrapper (Oversized to hide spinning edges) -->
+   <!-- Map Container Wrapper (Oversized to hide spinning edges) -->
     <div style="flex: 1; width: 100%; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <!-- TACTICAL ALERT OVERLAY BOX -->
+        <div id="mapReviewTacticalBanner" style="display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 92%; max-width: 440px; background: rgba(20, 20, 20, 0.94); border: 2px solid #ea4335; border-radius: 14px; padding: 12px 15px; z-index: 2000; box-shadow: 0 6px 20px rgba(0,0,0,0.85); color: white; font-family: sans-serif; box-sizing: border-box; pointer-events: auto; max-height: 45vh; overflow-y: auto;"></div>
         <div id="fullScreenMap" style="width: 150vmax; height: 150vmax; position: absolute;"></div>
     </div>
     
@@ -1122,7 +1124,7 @@
                     if (/\bRP\d*\b/.test(searchStr)) wpType = "RP";
                     else if (/\bNO\s?S\d*\b/.test(searchStr) || /\b1000\s?MIGLIA\b/.test(searchStr)) wpType = "NOS";
                     else if (/\bMARSHAL\d*\b/.test(searchStr) || /\bS\d*\b/.test(searchStr)) wpType = "MARSHAL";
-                    rawWaypoints.push({ name: name, desc: description, type: wpType, lon: parseFloat(coords[0]), lat: parseFloat(coords[1]) });
+                    rawWaypoints.push({ name: name, desc: description, type: wpType, lon: parseFloat(coords[0]), lat: parseFloat(coords[1]), ele: parseFloat(coords[2]) || 0 });
                 }
 
                 const line = placemarks[i].getElementsByTagName("LineString")[0];
@@ -1131,7 +1133,7 @@
                     pts.forEach(p => {
                         if (p.trim()) {
                             const c = p.split(",");
-                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]) });
+                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]), ele: parseFloat(c[2]) || 0 });
                         }
                     });
                 }
@@ -1144,7 +1146,7 @@
                     pts.forEach(p => {
                         if (p.trim()) {
                             const c = p.split(",");
-                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]) });
+                            rawPathCoords.push({ lon: parseFloat(c[0]), lat: parseFloat(c[1]), ele: parseFloat(c[2]) || 0 });
                         }
                     });
                 }
@@ -1561,7 +1563,7 @@
         return total;
     }
 
-    // THE FIX STEP 3: Add the Densification Engine here
+    // THE FIX STEP 3: Add the Densification Engine here (Now preserves & interpolates Altitude)
     function densifyPath(coords, maxGapKm) {
         let denseCoords = [];
         if (coords.length === 0) return denseCoords;
@@ -1571,6 +1573,8 @@
             let p1 = coords[i];
             let p2 = coords[i+1];
             let dist = calculateHaverDist(p1.lat, p1.lon, p2.lat, p2.lon);
+            let ele1 = p1.ele || 0;
+            let ele2 = p2.ele || 0;
             
             if (dist > maxGapKm) {
                 let steps = Math.ceil(dist / maxGapKm);
@@ -1578,7 +1582,8 @@
                     let fraction = j / steps;
                     let interpolatedLat = p1.lat + (p2.lat - p1.lat) * fraction;
                     let interpolatedLon = p1.lon + (p2.lon - p1.lon) * fraction;
-                    denseCoords.push({ lat: interpolatedLat, lon: interpolatedLon });
+                    let interpolatedEle = ele1 + (ele2 - ele1) * fraction;
+                    denseCoords.push({ lat: interpolatedLat, lon: interpolatedLon, ele: interpolatedEle });
                 }
             } else {
                 denseCoords.push(p2);
@@ -3016,10 +3021,179 @@
             if (!window.carStopTrackers) window.carStopTrackers = {};
             if (!window.latestCarsSnapshot) window.latestCarsSnapshot = {};
 
+            // TEST MODE SWITCH: Set to 'true' later if you only want alarms within 80m of the KML stage path
+            const STRICT_STAGE_CORRIDOR_ONLY = false;
+
+            function formatAlertMeters(m) {
+                return m >= 10000 ? (m / 1000).toFixed(2) + "km" : m + "m";
+            }
+
+            // Builds the Tactical Alert message for a stopped CAR (Hybrid KML Path + No-KML Direct Fallback)
+            function buildCarTacticalReport(carId, carData) {
+                let activePath = (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) ? navPathCoords : rawPathCoords;
+                let activeWps = (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) ? navWaypoints : rawWaypoints;
+
+                // CASE A: NO KML LOADED -> Direct Straight-Line distance to any live RP / S on Firebase
+                if (!activePath || activePath.length === 0 || !activeWps || activeWps.length === 0) {
+                    let liveMarshals = [];
+                    if (window.latestCarsSnapshot) {
+                        for (const otherId in window.latestCarsSnapshot) {
+                            if (otherId === carId) continue;
+                            let uId = otherId.toUpperCase().trim();
+                            if (/^RP\s*\d*/.test(uId) || /^S\s*\d*/.test(uId) || uId.includes("MARSHAL") || uId.includes("RADIO")) {
+                                let mData = window.latestCarsSnapshot[otherId];
+                                let directDistM = Math.round(calculateHaverDist(carData.lat, carData.lon, mData.lat, mData.lon) * 1000);
+                                liveMarshals.push({ name: otherId, distM: directDistM });
+                            }
+                        }
+                    }
+                    liveMarshals.sort((a, b) => a.distM - b.distM);
+
+                    if (liveMarshals.length > 0) {
+                        let topTwo = liveMarshals.slice(0, 2).map(m => 
+                            `<div style="font-size: 0.85rem; margin: 3px 0;">• <b>${m.name}:</b> ${formatAlertMeters(m.distM)} away <span style="color:#aaa;">(Direct line - No KML)</span></div>`
+                        ).join('');
+                        return `
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #444;">
+                                <div style="color: #ff5252; font-weight: 900; font-size: 0.95rem; margin-bottom: 4px;">🚨 ${carId} HAS STOPPED!</div>
+                                ${topTwo}
+                                <div style="margin-top: 6px; padding: 6px 8px; background: rgba(251, 188, 5, 0.15); border-left: 3px solid #fbbc05; border-radius: 4px; font-size: 0.82rem; color: #fff;">
+                                    💡 <b>ADVICE:</b> Dispatch <b>${liveMarshals[0].name}</b> (${formatAlertMeters(liveMarshals[0].distM)} direct).
+                                </div>
+                            </div>`;
+                    }
+                    return `
+                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #444;">
+                            <div style="color: #ff5252; font-weight: 900; font-size: 0.95rem;">🚨 ${carId} HAS STOPPED!</div>
+                            <div style="color: #ccc; font-size: 0.8rem; margin-top: 3px;">No KML loaded & no live RP/S Marshals online. Load a Stage KML to see RP/S path distances.</div>
+                        </div>`;
+                }
+
+                // CASE B: KML LOADED -> Hybrid Distance (Direct from CAR to closest path point + Along KML Path to RP/S)
+                let minCarDistKm = 9999, carPathIdx = 0;
+                for (let i = 0; i < activePath.length; i++) {
+                    let d = calculateHaverDist(carData.lat, carData.lon, activePath[i].lat, activePath[i].lon);
+                    if (d < minCarDistKm) { minCarDistKm = d; carPathIdx = i; }
+                }
+                let offPathMeters = Math.round(minCarDistKm * 1000);
+                let carAlt = activePath[carPathIdx].ele || 0;
+
+                let behindMarshal = null, aheadMarshal = null;
+
+                for (let i = 0; i < activeWps.length; i++) {
+                    let wp = activeWps[i];
+                    let wpType = (wp.type || "").toUpperCase().trim();
+                    let cleanName = wp.name.split('|')[0].trim();
+                    let upperName = cleanName.toUpperCase();
+
+                    let isMarshalOrRp = (wpType === "RP" || wpType === "MARSHAL" || wpType === "S" || /^RP\s*\d+/i.test(cleanName) || /^S\s*\d+/i.test(cleanName));
+                    if (!isMarshalOrRp || upperName.includes("START") || upperName.includes("FINISH") || upperName.includes("FLYING") || upperName.includes("NO S") || upperName.includes("1000")) continue;
+
+                    let minWpDist = 9999, wpPathIdx = 0;
+                    for (let j = 0; j < activePath.length; j++) {
+                        let d = calculateHaverDist(wp.lat, wp.lon, activePath[j].lat, activePath[j].lon);
+                        if (d < minWpDist) { minWpDist = d; wpPathIdx = j; }
+                    }
+
+                    let wpAlt = (wp.ele && wp.ele !== 0) ? wp.ele : (activePath[wpPathIdx].ele || 0);
+                    let elevDiffToCar = Math.round(carAlt - wpAlt);
+
+                    if (wpPathIdx <= carPathIdx) {
+                        let pathDistKm = 0;
+                        for (let k = wpPathIdx; k < carPathIdx; k++) {
+                            pathDistKm += calculateHaverDist(activePath[k].lat, activePath[k].lon, activePath[k+1].lat, activePath[k+1].lon);
+                        }
+                        let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
+                        if (!behindMarshal || totalMeters < behindMarshal.distM) {
+                            behindMarshal = { name: cleanName, distM: totalMeters, direction: "Move FORWARD", elevDiff: elevDiffToCar };
+                        }
+                    } else {
+                        let pathDistKm = 0;
+                        for (let k = carPathIdx; k < wpPathIdx; k++) {
+                            pathDistKm += calculateHaverDist(activePath[k].lat, activePath[k].lon, activePath[k+1].lat, activePath[k+1].lon);
+                        }
+                        let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
+                        if (!aheadMarshal || totalMeters < aheadMarshal.distM) {
+                            aheadMarshal = { name: cleanName, distM: totalMeters, direction: "Move BACKWARD", elevDiff: elevDiffToCar };
+                        }
+                    }
+                }
+
+                function formatSlope(elevDiff) {
+                    if (Math.abs(elevDiff) <= 3) return `(Flat 0m)`;
+                    return elevDiff > 3 ? `(Uphill +${elevDiff}m)` : `(Downhill ${elevDiff}m)`;
+                }
+
+                let offTrackNotice = offPathMeters > 35 ? ` <span style="color:#ff9800; font-size:0.75rem;">(includes ${formatAlertMeters(offPathMeters)} direct to path)</span>` : '';
+                let linesHtml = "";
+                if (behindMarshal) linesHtml += `<div style="font-size: 0.85rem; margin: 3px 0;">• <b>${behindMarshal.name}:</b> ${formatAlertMeters(behindMarshal.distM)} away - <span style="color:#66b2ff; font-weight:bold;">${behindMarshal.direction}</span> <span style="color:#ccc;">${formatSlope(behindMarshal.elevDiff)}</span></div>`;
+                if (aheadMarshal) linesHtml += `<div style="font-size: 0.85rem; margin: 3px 0;">• <b>${aheadMarshal.name}:</b> ${formatAlertMeters(aheadMarshal.distM)} away - <span style="color:#fbbc05; font-weight:bold;">${aheadMarshal.direction}</span> <span style="color:#ccc;">${formatSlope(aheadMarshal.elevDiff)}</span></div>`;
+
+                let adviceText = "";
+                if (behindMarshal && aheadMarshal) {
+                    let closer = behindMarshal.distM <= aheadMarshal.distM ? behindMarshal : aheadMarshal;
+                    let further = behindMarshal.distM <= aheadMarshal.distM ? aheadMarshal : behindMarshal;
+                    if (closer.elevDiff >= 8 && further.elevDiff <= -6 && (further.distM - closer.distM <= 250 || further.distM <= closer.distM * 1.8)) {
+                        adviceText = `💡 <b>ADVICE:</b> ${closer.name} is closer (${formatAlertMeters(closer.distM)}), but it will be easier for <b>${further.name}</b> (${formatAlertMeters(further.distM)}) to run downhill!`;
+                    } else if (closer.elevDiff <= -6) {
+                        adviceText = `💡 <b>ADVICE:</b> <b>${closer.name}</b> is closer (${formatAlertMeters(closer.distM)}) and running downhill!`;
+                    } else {
+                        adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${closer.name}</b> (${formatAlertMeters(closer.distM)} away - ${closer.direction}).`;
+                    }
+                } else if (behindMarshal) {
+                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${behindMarshal.name}</b> (${formatAlertMeters(behindMarshal.distM)} away - Move FORWARD).`;
+                } else if (aheadMarshal) {
+                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${aheadMarshal.name}</b> (${formatAlertMeters(aheadMarshal.distM)} away - Move BACKWARD).`;
+                }
+
+                return `
+                    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #444;">
+                        <div style="color: #ff5252; font-weight: 900; font-size: 0.95rem; margin-bottom: 4px;">🚨 ${carId} HAS STOPPED!${offTrackNotice}</div>
+                        ${linesHtml}
+                        ${adviceText ? `<div style="margin-top: 6px; padding: 6px 8px; background: rgba(251, 188, 5, 0.15); border-left: 3px solid #fbbc05; border-radius: 4px; font-size: 0.82rem; color: #fff;">${adviceText}</div>` : ''}
+                    </div>`;
+            }
+
+            function updateMapReviewTacticalBanner(checkTime) {
+                const banner = document.getElementById('mapReviewTacticalBanner');
+                if (!banner) return;
+                let stoppedReports = [];
+                if (window.latestCarsSnapshot) {
+                    for (const carId in window.latestCarsSnapshot) {
+                        let carData = window.latestCarsSnapshot[carId];
+                        if (checkTime - carData.timestamp > 120000) continue;
+                        if (evaluateCarStopState(carId, carData, checkTime)) {
+                            stoppedReports.push(buildCarTacticalReport(carId, carData));
+                        }
+                    }
+                }
+                if (stoppedReports.length > 0) {
+                    banner.innerHTML = `<div style="text-align: center; font-weight: 900; font-size: 0.9rem; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px;">🚨 TACTICAL ALERT</div>${stoppedReports.join('')}`;
+                    banner.style.display = 'block';
+                } else {
+                    banner.style.display = 'none';
+                    banner.innerHTML = '';
+                }
+            }
+
             // Helper function that evaluates if a CAR has been stopped (< 2 km/h) for >= 30 seconds
             function evaluateCarStopState(carId, carData, checkTime) {
                 let upperId = (carId || "").toUpperCase();
                 if (!upperId.includes("CAR")) return false;
+
+                if (STRICT_STAGE_CORRIDOR_ONLY) {
+                    let activePath = (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) ? navPathCoords : rawPathCoords;
+                    if (!activePath || activePath.length === 0) return false;
+                    let minDistKm = 9999;
+                    for (let i = 0; i < activePath.length; i++) {
+                        let d = calculateHaverDist(carData.lat, carData.lon, activePath[i].lat, activePath[i].lon);
+                        if (d < minDistKm) minDistKm = d;
+                    }
+                    if (minDistKm > 0.080) {
+                        if (window.carStopTrackers[carId]) window.carStopTrackers[carId].stoppedSince = null;
+                        return false;
+                    }
+                }
 
                 let liveSpeed = carData.speed || 0;
                 if (!window.carStopTrackers[carId]) {
@@ -3059,7 +3233,7 @@
 
                 // Check 30-second stop alarm for CAR category
                 let isStoppedAlarm = evaluateCarStopState(carId, compData, now);
-                if (isStoppedAlarm) displaySpeed = 0; // Show 0 km/h immediately when alarm is active
+                if (isStoppedAlarm) displaySpeed = 0;
 
                 let filterColor = 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))';
                 let heading = compData.heading || 0;
@@ -3139,10 +3313,11 @@
 
                     renderCompetitorOnMapReview(carId, compData, now);
                 }
+
+                updateMapReviewTacticalBanner(now);
             });
 
             // --- Active Ghost Sweeper & 1-Second Stop Timer Watchdog ---
-            // Runs every 1 second so a stopped CAR starts blinking at the exact 30.0s mark even if its GPS pauses sending updates
             if (!window.ghostSweeperMapReview) {
                 window.ghostSweeperMapReview = setInterval(() => {
                     const checkTime = Date.now();
@@ -3154,7 +3329,6 @@
                                 if (window.carStopTrackers) delete window.carStopTrackers[carId];
                                 continue;
                             }
-                            // Check if a stopped car just crossed the 30s threshold
                             if (window.latestCarsSnapshot && window.latestCarsSnapshot[carId]) {
                                 let compData = window.latestCarsSnapshot[carId];
                                 let shouldAlarm = evaluateCarStopState(carId, compData, checkTime);
@@ -3164,7 +3338,6 @@
                             }
                         }
                     }
-                    // Also check own car if logged in as CAR X for testing
                     if (myCarId && myCarId.toUpperCase().includes("CAR") && window.latestCarsSnapshot && window.latestCarsSnapshot[myCarId]) {
                         let myData = window.latestCarsSnapshot[myCarId];
                         let isMyCarStoppedAlarm = evaluateCarStopState(myCarId, myData, checkTime);
@@ -3182,12 +3355,16 @@
                             }
                         }
                     }
+
+                    updateMapReviewTacticalBanner(checkTime);
                 }, 1000);
             }
 
             // --- Draw Pre-loaded KML on Map Review ---
-            if (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) {
-                let latlngs = navPathCoords.map(pt => [pt.lat, pt.lon]);
+            let reviewPathToDraw = (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) ? navPathCoords : rawPathCoords;
+            let reviewWpsToDraw = (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) ? navWaypoints : rawWaypoints;
+            if (reviewPathToDraw && reviewPathToDraw.length > 0) {
+                let latlngs = reviewPathToDraw.map(pt => [pt.lat, pt.lon]);
                 
                 if (window.mapReviewRouteLine) {
                     mapReviewInstance.removeLayer(window.mapReviewRouteLine);
@@ -3195,13 +3372,13 @@
                 window.mapReviewRouteLine = L.polyline(latlngs, { color: '#ea4335', weight: 6, opacity: 0.8 }).addTo(mapReviewInstance);
                 mapReviewInstance.fitBounds(window.mapReviewRouteLine.getBounds());
                 
-                if (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) {
+                if (reviewWpsToDraw && reviewWpsToDraw.length > 0) {
                     if (window.mapReviewWpMarkers && window.mapReviewWpMarkers.length > 0) {
                         window.mapReviewWpMarkers.forEach(m => mapReviewInstance.removeLayer(m));
                     }
                     window.mapReviewWpMarkers = [];
 
-                    navWaypoints.forEach((wp) => {
+                    reviewWpsToDraw.forEach((wp) => {
                         let iconUrl = null;
                         let searchStr = (wp.name + " " + (wp.desc || "")).toUpperCase();
                         
