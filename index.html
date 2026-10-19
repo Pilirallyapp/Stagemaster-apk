@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.90</title>
+    <title>StageMaster 11.95</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -198,6 +198,12 @@
     function skipWelcomeKml() {
         let inputVal = document.getElementById('welcomeCarIdInput').value;
         if (!inputVal) { alert("Please enter your Name / ID first"); return; }
+        // Wipe any old recovered KML from memory when explicitly skipping file load
+        rawWaypoints = [];
+        rawPathCoords = [];
+        navWaypoints = [];
+        navPathCoords = [];
+        localStorage.removeItem('stagemaster_vault');
         finalizeWelcome(inputVal);
     }
 
@@ -337,7 +343,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.90</div>
+        <div style="font-size: 0.6rem; color: #666;">version 11.95</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -3029,19 +3035,26 @@
             }
 
             // Builds the Tactical Alert message for a stopped CAR (Hybrid KML Path + No-KML Direct Fallback)
-            function buildCarTacticalReport(carId, carData) {
+            function buildCarTacticalReport(carId, carData, checkTime) {
                 let activePath = (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) ? navPathCoords : rawPathCoords;
                 let activeWps = (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) ? navWaypoints : rawWaypoints;
 
-                // CASE A: NO KML LOADED -> Direct Straight-Line distance to any live RP / S on Firebase
+                // CASE A: NO KML LOADED -> Direct Straight-Line distance to any LIVE RP / S on Firebase
                 if (!activePath || activePath.length === 0 || !activeWps || activeWps.length === 0) {
                     let liveMarshals = [];
                     if (window.latestCarsSnapshot) {
                         for (const otherId in window.latestCarsSnapshot) {
                             if (otherId === carId) continue;
+                            let mData = window.latestCarsSnapshot[otherId];
+                            
+                            // CRITICAL FIX: Ignore & purge dead/ghost Firebase records older than 2 minutes (120,000ms)
+                            if (!mData || !mData.timestamp || (checkTime - mData.timestamp > 120000)) {
+                                database.ref('live_stage/' + otherId).remove().catch(()=>{});
+                                continue;
+                            }
+
                             let uId = otherId.toUpperCase().trim();
                             if (/^RP\s*\d*/.test(uId) || /^S\s*\d*/.test(uId) || uId.includes("MARSHAL") || uId.includes("RADIO")) {
-                                let mData = window.latestCarsSnapshot[otherId];
                                 let directDistM = Math.round(calculateHaverDist(carData.lat, carData.lon, mData.lat, mData.lon) * 1000);
                                 liveMarshals.push({ name: otherId, distM: directDistM });
                             }
@@ -3161,9 +3174,9 @@
                 if (window.latestCarsSnapshot) {
                     for (const carId in window.latestCarsSnapshot) {
                         let carData = window.latestCarsSnapshot[carId];
-                        if (checkTime - carData.timestamp > 120000) continue;
+                        if (!carData || !carData.timestamp || (checkTime - carData.timestamp > 120000)) continue;
                         if (evaluateCarStopState(carId, carData, checkTime)) {
-                            stoppedReports.push(buildCarTacticalReport(carId, carData));
+                            stoppedReports.push(buildCarTacticalReport(carId, carData, checkTime));
                         }
                     }
                 }
