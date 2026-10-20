@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 11.95</title>
+    <title>StageMaster 12.00</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -343,7 +343,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 11.95</div>
+        <div style="font-size: 0.6rem; color: #666;">version 12.00</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -3082,7 +3082,7 @@
                         </div>`;
                 }
 
-                // CASE B: KML LOADED -> Hybrid Distance (Direct from CAR to closest path point + Along KML Path to RP/S)
+                // CASE B: KML LOADED -> Priority Hybrid Distance
                 let minCarDistKm = 9999, carPathIdx = 0;
                 for (let i = 0; i < activePath.length; i++) {
                     let d = calculateHaverDist(carData.lat, carData.lon, activePath[i].lat, activePath[i].lon);
@@ -3091,25 +3091,53 @@
                 let offPathMeters = Math.round(minCarDistKm * 1000);
                 let carAlt = activePath[carPathIdx].ele || 0;
 
+                // --- NEW LOGIC: Priority 1 = Live Firebase Marshals, Priority 2 = Static KML Marshals ---
+                let dispatchTargets = [];
+                
+                // 1. Check for LIVE signals
+                if (window.latestCarsSnapshot) {
+                    for (const otherId in window.latestCarsSnapshot) {
+                        if (otherId === carId) continue;
+                        let mData = window.latestCarsSnapshot[otherId];
+                        if (!mData || !mData.timestamp || (checkTime - mData.timestamp > 120000)) continue;
+                        
+                        let uId = otherId.toUpperCase().trim();
+                        if (/^RP\s*\d*/.test(uId) || /^S\s*\d*/.test(uId) || uId.includes("MARSHAL") || uId.includes("RADIO")) {
+                            dispatchTargets.push({ name: otherId, lat: mData.lat, lon: mData.lon, ele: mData.ele || 0, isLive: true });
+                        }
+                    }
+                }
+
+                // 2. Fallback to STATIC KML points if no live signals found
+                if (dispatchTargets.length === 0) {
+                    for (let i = 0; i < activeWps.length; i++) {
+                        let wp = activeWps[i];
+                        let wpType = (wp.type || "").toUpperCase().trim();
+                        let cleanName = wp.name.split('|')[0].trim();
+                        let upperName = cleanName.toUpperCase();
+
+                        let isMarshalOrRp = (wpType === "RP" || wpType === "MARSHAL" || wpType === "S" || /^RP\s*\d+/i.test(cleanName) || /^S\s*\d+/i.test(cleanName));
+                        if (!isMarshalOrRp || upperName.includes("START") || upperName.includes("FINISH") || upperName.includes("FLYING") || upperName.includes("NO S") || upperName.includes("1000")) continue;
+
+                        dispatchTargets.push({ name: cleanName, lat: wp.lat, lon: wp.lon, ele: wp.ele || 0, isLive: false });
+                    }
+                }
+
+                // 3. Project chosen targets onto KML Path and calculate road distances
                 let behindMarshal = null, aheadMarshal = null;
 
-                for (let i = 0; i < activeWps.length; i++) {
-                    let wp = activeWps[i];
-                    let wpType = (wp.type || "").toUpperCase().trim();
-                    let cleanName = wp.name.split('|')[0].trim();
-                    let upperName = cleanName.toUpperCase();
-
-                    let isMarshalOrRp = (wpType === "RP" || wpType === "MARSHAL" || wpType === "S" || /^RP\s*\d+/i.test(cleanName) || /^S\s*\d+/i.test(cleanName));
-                    if (!isMarshalOrRp || upperName.includes("START") || upperName.includes("FINISH") || upperName.includes("FLYING") || upperName.includes("NO S") || upperName.includes("1000")) continue;
-
+                for (let i = 0; i < dispatchTargets.length; i++) {
+                    let target = dispatchTargets[i];
                     let minWpDist = 9999, wpPathIdx = 0;
                     for (let j = 0; j < activePath.length; j++) {
-                        let d = calculateHaverDist(wp.lat, wp.lon, activePath[j].lat, activePath[j].lon);
+                        let d = calculateHaverDist(target.lat, target.lon, activePath[j].lat, activePath[j].lon);
                         if (d < minWpDist) { minWpDist = d; wpPathIdx = j; }
                     }
 
-                    let wpAlt = (wp.ele && wp.ele !== 0) ? wp.ele : (activePath[wpPathIdx].ele || 0);
-                    let elevDiffToCar = Math.round(carAlt - wpAlt);
+                    let targetAlt = (target.ele && target.ele !== 0) ? target.ele : (activePath[wpPathIdx].ele || 0);
+                    let elevDiffToCar = Math.round(carAlt - targetAlt);
+                    
+                    let displayName = target.isLive ? `${target.name} 🟢` : target.name;
 
                     if (wpPathIdx <= carPathIdx) {
                         let pathDistKm = 0;
@@ -3118,7 +3146,7 @@
                         }
                         let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
                         if (!behindMarshal || totalMeters < behindMarshal.distM) {
-                            behindMarshal = { name: cleanName, distM: totalMeters, direction: "Move FORWARD", elevDiff: elevDiffToCar };
+                            behindMarshal = { name: displayName, distM: totalMeters, direction: "Move FORWARD", elevDiff: elevDiffToCar };
                         }
                     } else {
                         let pathDistKm = 0;
@@ -3127,7 +3155,7 @@
                         }
                         let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
                         if (!aheadMarshal || totalMeters < aheadMarshal.distM) {
-                            aheadMarshal = { name: cleanName, distM: totalMeters, direction: "Move BACKWARD", elevDiff: elevDiffToCar };
+                            aheadMarshal = { name: displayName, distM: totalMeters, direction: "Move BACKWARD", elevDiff: elevDiffToCar };
                         }
                     }
                 }
