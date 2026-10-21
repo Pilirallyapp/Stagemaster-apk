@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StageMaster 12.00</title>
+    <title>StageMaster 12.10</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html { overscroll-behavior: none; }
@@ -343,7 +343,7 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 15px; padding: 0 5px; box-sizing: border-box;">
-        <div style="font-size: 0.6rem; color: #666;">version 12.00</div>
+        <div style="font-size: 0.6rem; color: #666;">version 12.10</div>
         <button id="hardRestartBtn" style="background: transparent; color: #ea4335; border: 1px solid #ea4335; border-radius: 6px; padding: 5px 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; position: relative; overflow: hidden; height: 30px;">Hold 3s to Restart</button>
     </div>
 </div> <!-- This closes the main .card container! -->
@@ -3039,6 +3039,13 @@
                 let activePath = (typeof navPathCoords !== 'undefined' && navPathCoords.length > 0) ? navPathCoords : rawPathCoords;
                 let activeWps = (typeof navWaypoints !== 'undefined' && navWaypoints.length > 0) ? navWaypoints : rawWaypoints;
 
+                // Helper to normalize names for strict matching (e.g., "S 10" -> "S10", "Radio Point 8" -> "RP8")
+                function normalizeWpName(name) {
+                    let clean = name.toUpperCase().replace(/\s+/g, ''); // Remove all spaces
+                    clean = clean.replace(/RADIOPOINT/g, 'RP'); // Standardize RP
+                    return clean;
+                }
+
                 // CASE A: NO KML LOADED -> Direct Straight-Line distance to any LIVE RP / S on Firebase
                 if (!activePath || activePath.length === 0 || !activeWps || activeWps.length === 0) {
                     let liveMarshals = [];
@@ -3047,7 +3054,6 @@
                             if (otherId === carId) continue;
                             let mData = window.latestCarsSnapshot[otherId];
                             
-                            // CRITICAL FIX: Ignore & purge dead/ghost Firebase records older than 2 minutes (120,000ms)
                             if (!mData || !mData.timestamp || (checkTime - mData.timestamp > 120000)) {
                                 database.ref('live_stage/' + otherId).remove().catch(()=>{});
                                 continue;
@@ -3064,7 +3070,7 @@
 
                     if (liveMarshals.length > 0) {
                         let topTwo = liveMarshals.slice(0, 2).map(m => 
-                            `<div style="font-size: 0.85rem; margin: 3px 0;">• <b>${m.name}:</b> ${formatAlertMeters(m.distM)} away <span style="color:#aaa;">(Direct line - No KML)</span></div>`
+                            `<div style="font-size: 0.85rem; margin: 3px 0;">• <b>${m.name} 🟢:</b> ${formatAlertMeters(m.distM)} away <span style="color:#aaa;">(Direct line - No KML)</span></div>`
                         ).join('');
                         return `
                             <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #444;">
@@ -3091,10 +3097,38 @@
                 let offPathMeters = Math.round(minCarDistKm * 1000);
                 let carAlt = activePath[carPathIdx].ele || 0;
 
-                // --- NEW LOGIC: Priority 1 = Live Firebase Marshals, Priority 2 = Static KML Marshals ---
-                let dispatchTargets = [];
-                
-                // 1. Check for LIVE signals
+                // --- HYBRID MERGE LOGIC ---
+                let dispatchTargetsMap = {};
+
+                // 1. Load Static KML Points Baseline
+                for (let i = 0; i < activeWps.length; i++) {
+                    let wp = activeWps[i];
+                    let wpType = (wp.type || "").toUpperCase().trim();
+                    let rawName = wp.name.split('|')[0].trim();
+                    let upperName = rawName.toUpperCase();
+
+                    let isMarshalOrRp = (wpType === "RP" || wpType === "MARSHAL" || wpType === "S" || /^RP\s*\d+/i.test(rawName) || /^S\s*\d+/i.test(rawName) || upperName.includes("RADIO POINT"));
+                    
+                    if (!isMarshalOrRp || upperName.includes("START") || upperName.includes("FINISH") || upperName.includes("FLYING") || upperName.includes("NO S") || upperName.includes("1000")) continue;
+
+                    let normName = normalizeWpName(rawName);
+                    
+                    // Format for display (e.g. "S10" -> "S 10")
+                    let displayName = rawName;
+                    if (normName.startsWith('RP')) displayName = normName.replace('RP', 'RP ');
+                    if (normName.startsWith('S')) displayName = normName.replace('S', 'S ');
+
+                    dispatchTargetsMap[normName] = {
+                        id: normName,
+                        name: displayName,
+                        lat: wp.lat,
+                        lon: wp.lon,
+                        ele: wp.ele || 0,
+                        isLive: false
+                    };
+                }
+
+                // 2. Merge Live Firebase Signals (Overwrites static data if matched)
                 if (window.latestCarsSnapshot) {
                     for (const otherId in window.latestCarsSnapshot) {
                         if (otherId === carId) continue;
@@ -3102,26 +3136,27 @@
                         if (!mData || !mData.timestamp || (checkTime - mData.timestamp > 120000)) continue;
                         
                         let uId = otherId.toUpperCase().trim();
-                        if (/^RP\s*\d*/.test(uId) || /^S\s*\d*/.test(uId) || uId.includes("MARSHAL") || uId.includes("RADIO")) {
-                            dispatchTargets.push({ name: otherId, lat: mData.lat, lon: mData.lon, ele: mData.ele || 0, isLive: true });
+                        if (/^RP\s*\d*/.test(uId) || /^S\s*\d*/.test(uId) || uId.includes("RADIO")) {
+                            let normName = normalizeWpName(otherId);
+                            
+                            let displayName = otherId;
+                            if (normName.startsWith('RP')) displayName = normName.replace('RP', 'RP ');
+                            if (normName.startsWith('S')) displayName = normName.replace('S', 'S ');
+
+                            // Overwrite or Append
+                            dispatchTargetsMap[normName] = {
+                                id: normName,
+                                name: displayName,
+                                lat: mData.lat,
+                                lon: mData.lon,
+                                ele: mData.ele || 0, // Uses mobile elevation data
+                                isLive: true
+                            };
                         }
                     }
                 }
 
-                // 2. Fallback to STATIC KML points if no live signals found
-                if (dispatchTargets.length === 0) {
-                    for (let i = 0; i < activeWps.length; i++) {
-                        let wp = activeWps[i];
-                        let wpType = (wp.type || "").toUpperCase().trim();
-                        let cleanName = wp.name.split('|')[0].trim();
-                        let upperName = cleanName.toUpperCase();
-
-                        let isMarshalOrRp = (wpType === "RP" || wpType === "MARSHAL" || wpType === "S" || /^RP\s*\d+/i.test(cleanName) || /^S\s*\d+/i.test(cleanName));
-                        if (!isMarshalOrRp || upperName.includes("START") || upperName.includes("FINISH") || upperName.includes("FLYING") || upperName.includes("NO S") || upperName.includes("1000")) continue;
-
-                        dispatchTargets.push({ name: cleanName, lat: wp.lat, lon: wp.lon, ele: wp.ele || 0, isLive: false });
-                    }
-                }
+                let dispatchTargets = Object.values(dispatchTargetsMap);
 
                 // 3. Project chosen targets onto KML Path and calculate road distances
                 let behindMarshal = null, aheadMarshal = null;
@@ -3134,10 +3169,10 @@
                         if (d < minWpDist) { minWpDist = d; wpPathIdx = j; }
                     }
 
-                    let targetAlt = (target.ele && target.ele !== 0) ? target.ele : (activePath[wpPathIdx].ele || 0);
-                    let elevDiffToCar = Math.round(carAlt - targetAlt);
+                    // Target elevation is already set correctly (Mobile if live, KML if static)
+                    let elevDiffToCar = Math.round(carAlt - target.ele);
                     
-                    let displayName = target.isLive ? `${target.name} 🟢` : target.name;
+                    let displayName = target.isLive ? `${target.name} 🟢` : `${target.name} ⚪`;
 
                     if (wpPathIdx <= carPathIdx) {
                         let pathDistKm = 0;
@@ -3146,7 +3181,7 @@
                         }
                         let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
                         if (!behindMarshal || totalMeters < behindMarshal.distM) {
-                            behindMarshal = { name: displayName, distM: totalMeters, direction: "Move FORWARD", elevDiff: elevDiffToCar };
+                            behindMarshal = { name: displayName, rawName: target.name, distM: totalMeters, direction: "Move FORWARD", elevDiff: elevDiffToCar };
                         }
                     } else {
                         let pathDistKm = 0;
@@ -3155,7 +3190,7 @@
                         }
                         let totalMeters = offPathMeters + Math.round(pathDistKm * 1000);
                         if (!aheadMarshal || totalMeters < aheadMarshal.distM) {
-                            aheadMarshal = { name: displayName, distM: totalMeters, direction: "Move BACKWARD", elevDiff: elevDiffToCar };
+                            aheadMarshal = { name: displayName, rawName: target.name, distM: totalMeters, direction: "Move BACKWARD", elevDiff: elevDiffToCar };
                         }
                     }
                 }
@@ -3175,16 +3210,16 @@
                     let closer = behindMarshal.distM <= aheadMarshal.distM ? behindMarshal : aheadMarshal;
                     let further = behindMarshal.distM <= aheadMarshal.distM ? aheadMarshal : behindMarshal;
                     if (closer.elevDiff >= 8 && further.elevDiff <= -6 && (further.distM - closer.distM <= 250 || further.distM <= closer.distM * 1.8)) {
-                        adviceText = `💡 <b>ADVICE:</b> ${closer.name} is closer (${formatAlertMeters(closer.distM)}), but it will be easier for <b>${further.name}</b> (${formatAlertMeters(further.distM)}) to run downhill!`;
+                        adviceText = `💡 <b>ADVICE:</b> ${closer.rawName} is closer (${formatAlertMeters(closer.distM)}), but it will be easier for <b>${further.rawName}</b> (${formatAlertMeters(further.distM)}) to run downhill!`;
                     } else if (closer.elevDiff <= -6) {
-                        adviceText = `💡 <b>ADVICE:</b> <b>${closer.name}</b> is closer (${formatAlertMeters(closer.distM)}) and running downhill!`;
+                        adviceText = `💡 <b>ADVICE:</b> <b>${closer.rawName}</b> is closer (${formatAlertMeters(closer.distM)}) and running downhill!`;
                     } else {
-                        adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${closer.name}</b> (${formatAlertMeters(closer.distM)} away - ${closer.direction}).`;
+                        adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${closer.rawName}</b> (${formatAlertMeters(closer.distM)} away - ${closer.direction}).`;
                     }
                 } else if (behindMarshal) {
-                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${behindMarshal.name}</b> (${formatAlertMeters(behindMarshal.distM)} away - Move FORWARD).`;
+                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${behindMarshal.rawName}</b> (${formatAlertMeters(behindMarshal.distM)} away - Move FORWARD).`;
                 } else if (aheadMarshal) {
-                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${aheadMarshal.name}</b> (${formatAlertMeters(aheadMarshal.distM)} away - Move BACKWARD).`;
+                    adviceText = `💡 <b>ADVICE:</b> Dispatch <b>${aheadMarshal.rawName}</b> (${formatAlertMeters(aheadMarshal.distM)} away - Move BACKWARD).`;
                 }
 
                 return `
